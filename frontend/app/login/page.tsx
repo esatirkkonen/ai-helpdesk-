@@ -23,13 +23,17 @@ export default function LoginPage() {
       })
 
       if (!res.ok) {
-        setError('Väärä sähköposti tai salasana')
+        const data = await res.json()
+        setError(data.detail || 'Väärä sähköposti tai salasana')
         return
       }
 
       const data = await res.json()
       localStorage.setItem('token', data.token)
       localStorage.setItem('role', data.role)
+      localStorage.setItem('name', data.name)
+      localStorage.setItem('email', data.email)
+      localStorage.setItem('id', data.id)
 
       if (data.role === 'admin') router.push('/admin')
       else if (data.role === 'agent') router.push('/dashboard')
@@ -53,7 +57,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
-          <h1 className="text-white text-xl font-medium tracking-tight">CloudWeb-AI Helpdesk</h1>
+          <h1 className="text-white text-xl font-medium tracking-tight">CloudwebAI Helpdesk</h1>
           <p className="text-gray-500 text-sm mt-1">Kirjaudu sisään jatkaaksesi</p>
         </div>
 
@@ -65,7 +69,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="nimi@acme.fi"
+              placeholder="nimi@yritys.fi"
               required
               className="w-full bg-[#161b22] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
             />
@@ -92,14 +96,35 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
           >
             {loading ? 'Kirjaudutaan...' : 'Kirjaudu sisään'}
           </button>
         </form>
 
-        <p className="text-center text-gray-600 text-xs mt-8">
-         CloudWeb-AI Helpdesk — AI-avusteinen tukipalvelu
+        {/* Test credentials */}
+        <div className="mt-8 bg-[#161b22] border border-[#21262d] rounded-lg p-4">
+          <p className="text-xs text-gray-500 mb-3 font-medium">Testitunnukset:</p>
+          <div className="space-y-2">
+            {[
+              { role: 'Admin', email: 'admin@cloudwebai.fi' },
+              { role: 'Agentti', email: 'matti@cloudwebai.fi' },
+              { role: 'Asiakas', email: 'jukka@acme.fi' },
+            ].map(u => (
+              <button
+                key={u.email}
+                onClick={() => { setEmail(u.email); setPassword('admin123') }}
+                className="w-full text-left flex items-center justify-between px-3 py-2 rounded-md hover:bg-[#21262d] transition-colors"
+              >
+                <span className="text-xs text-gray-400">{u.role}</span>
+                <span className="text-xs text-gray-600">{u.email}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-center text-gray-600 text-xs mt-6">
+          CloudwebAI Helpdesk — AI-avusteinen tukipalvelu
         </p>
       </div>
     </div>
