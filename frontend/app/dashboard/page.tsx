@@ -29,6 +29,15 @@ type Agent = {
   email: string
 }
 
+type Comment = {
+  id: string
+  content: string
+  is_internal: boolean
+  created_at: string
+  user_id: string
+  user_name: string
+}
+
 const statusColors: Record<Status, string> = {
   'Avoin':       'bg-amber-500/10 text-amber-400 border-amber-500/20',
   'Työn alla':   'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -62,46 +71,54 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
-  const [editing, setEditing] = useState(false)
   const [timers, setTimers] = useState<Record<string, number>>({})
   const [running, setRunning] = useState<Record<string, boolean>>({})
-  const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
-
+  const [comments, setComments] = useState<Comment[]>([])
+  const [internalNote, setInternalNote] = useState('')
   const [token, setToken] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
 
+  useEffect(() => {
+    setToken(localStorage.getItem('token'))
+    setName(localStorage.getItem('name'))
+  }, [])
 
-
-useEffect(() => {
-  setToken(localStorage.getItem('token'))
-  setName(localStorage.getItem('name'))
-}, [])
-
-useEffect(() => {
-  if (token === null) return
-  if (!token) { router.push('/login'); return }
-  fetchTickets()
-  fetchAgents()
-  return () => { Object.values(intervalRef.current).forEach(clearInterval) }
-}, [token])
+  useEffect(() => {
+    if (token === null) return
+    if (!token) { router.push('/login'); return }
+    fetchTickets()
+    fetchAgents()
+    return () => { Object.values(intervalRef.current).forEach(clearInterval) }
+  }, [token])
 
   async function fetchTickets() {
-    setLoading(true)
-    try {
-      const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
-      if (res.status === 401) { router.push('/login'); return }
-      const data = await res.json()
-      setTickets(data)
-      if (data.length > 0 && !selected) setSelected(data[0])
-    } finally {
-      setLoading(false)
+  setLoading(true)
+  try {
+    const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
+    if (res.status === 401) { router.push('/login'); return }
+    const data = await res.json()
+    setTickets(data)
+    if (data.length > 0 && !selected) {
+      setSelected(data[0])
+      setTimeout(() => fetchComments(data[0].id), 0)
     }
+  } finally {
+    setLoading(false)
   }
+}
 
   async function fetchAgents() {
     const res = await fetch(`http://localhost:8000/agents?token=${token}`)
     const data = await res.json()
     setAgents(data)
+  }
+
+  async function fetchComments(ticketId: string) {
+    const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
+    const data = await res.json()
+     console.log('Comments received:', data)
+    setComments(data)
   }
 
   async function updateStatus(status: Status) {
@@ -115,7 +132,6 @@ useEffect(() => {
       const updated = { ...selected, status }
       setSelected(updated)
       setTickets(tickets.map(t => t.id === selected.id ? updated : t))
-
       if (status === 'Työn alla') startTimer(selected.id)
       else if (['Odottaa', 'Valmis', 'Keskeytetty'].includes(status)) stopTimer(selected.id)
     }
@@ -140,22 +156,30 @@ useEffect(() => {
     if (!selected || !reply.trim()) return
     setSending(true)
     try {
-      const res = await fetch(`http://localhost:8000/tickets/${selected.id}/reply?token=${token}`, {
+      const res = await fetch(`http://localhost:8000/tickets/${selected.id}/comments?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: reply,
-          outcome: 'accepted'
-        }),
+        body: JSON.stringify({ content: reply, is_internal: false }),
       })
       if (res.ok) {
         setReply('')
-        setEditing(false)
+        await fetchComments(selected.id)
         await fetchTickets()
       }
     } finally {
       setSending(false)
     }
+  }
+
+  async function addInternalNote() {
+    if (!selected || !internalNote.trim()) return
+    await fetch(`http://localhost:8000/tickets/${selected.id}/comments?token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: internalNote, is_internal: true }),
+    })
+    setInternalNote('')
+    await fetchComments(selected.id)
   }
 
   function startTimer(id: string) {
@@ -173,10 +197,12 @@ useEffect(() => {
   }
 
   function selectTicket(ticket: Ticket) {
-    setSelected(ticket)
-    setReply('')
-    setEditing(false)
-  }
+  setSelected(ticket)
+  setReply('')
+  setInternalNote('')
+  setComments([])
+  setTimeout(() => fetchComments(ticket.id), 0)
+}
 
   function logout() {
     localStorage.clear()
@@ -216,6 +242,7 @@ useEffect(() => {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
         <div className="w-72 border-r border-[#21262d] bg-[#161b22] flex flex-col flex-shrink-0">
           <div className="p-4 border-b border-[#21262d]">
             <div className="flex gap-3 text-xs">
@@ -265,10 +292,12 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* Main */}
         {selected ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-3xl mx-auto space-y-4">
 
+              {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -292,6 +321,7 @@ useEffect(() => {
                 </div>
               </div>
 
+              {/* Tila + Agentti */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
@@ -328,6 +358,7 @@ useEffect(() => {
                 </div>
               </div>
 
+              {/* Asiakkaan tiedot */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-3">Asiakkaan tiedot</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -350,11 +381,71 @@ useEffect(() => {
                 </div>
               </div>
 
+              {/* Ongelma */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-2">Ongelma</p>
                 <p className="text-sm text-gray-300 leading-relaxed">{selected.description}</p>
               </div>
 
+              {/* Kommenttihistoria */}
+              {comments.length > 0 && (
+                <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[#21262d]">
+                    <p className="text-xs text-gray-500">Kommenttihistoria ({comments.length})</p>
+                  </div>
+                  <div className="divide-y divide-[#21262d]">
+                    {comments.map(comment => (
+                      <div key={comment.id} className={`px-4 py-3 ${comment.is_internal ? 'bg-amber-500/5' : ''}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-300">{comment.user_name || 'Käyttäjä'}</span>
+                            {comment.is_internal && (
+                              <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                Sisäinen muistiinpano
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">
+                            {new Date(comment.created_at).toLocaleString('fi-FI')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-300 leading-relaxed">{comment.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sisäinen muistiinpano */}
+              <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/5 border-b border-[#21262d]">
+                  <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                  </svg>
+                  <span className="text-sm font-medium text-amber-400">Sisäinen muistiinpano</span>
+                  <span className="text-xs text-gray-500 ml-auto">Asiakas ei näe tätä</span>
+                </div>
+                <div className="p-4">
+                  <textarea
+                    value={internalNote}
+                    onChange={e => setInternalNote(e.target.value)}
+                    rows={3}
+                    placeholder="Kirjoita sisäinen muistiinpano..."
+                    className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors resize-none"
+                  />
+                </div>
+                <div className="px-4 pb-4">
+                  <button
+                    onClick={addInternalNote}
+                    disabled={!internalNote.trim()}
+                    className="flex items-center gap-1.5 border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg px-4 py-2 text-sm transition-colors"
+                  >
+                    Tallenna muistiinpano
+                  </button>
+                </div>
+              </div>
+
+              {/* Vastaus asiakkaalle */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 bg-blue-500/5 border-b border-[#21262d]">
                   <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">

@@ -370,3 +370,49 @@ def get_agents(token: str, db: Session = Depends(get_db)):
         "name": a.name,
         "email": a.email,
     } for a in agents]
+
+# ── Kommentit ─────────────────────────────────────────────────
+
+class CommentCreate(BaseModel):
+    content: str
+    is_internal: bool = False
+
+@app.get("/tickets/{ticket_id}/comments")
+def get_comments(ticket_id: str, token: str, db: Session = Depends(get_db)):
+    get_current_user(token, db)
+    comments = db.query(Comment).filter(
+        Comment.ticket_id == uuid.UUID(ticket_id)
+    ).order_by(Comment.created_at.asc()).all()
+    return [{
+        "id": str(c.id),
+        "content": c.content,
+        "is_internal": c.is_internal,
+        "created_at": c.created_at.isoformat(),
+        "user_id": str(c.user_id),
+    } for c in comments]
+
+@app.post("/tickets/{ticket_id}/comments")
+def add_comment(
+    ticket_id: str,
+    req: CommentCreate,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(token, db)
+    comment = Comment(
+        ticket_id=uuid.UUID(ticket_id),
+        user_id=user.id,
+        content=req.content,
+        is_internal=req.is_internal
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return {
+        "id": str(comment.id),
+        "content": comment.content,
+        "is_internal": comment.is_internal,
+        "created_at": comment.created_at.isoformat(),
+        "user_id": str(user.id),
+        "user_name": user.name,
+    }
