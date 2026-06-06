@@ -99,9 +99,21 @@ export default function DashboardPage() {
     if (res.status === 401) { router.push('/login'); return }
     const data = await res.json()
     setTickets(data)
-    if (data.length > 0 && !selected) {
-      setSelected(data[0])
-      setTimeout(() => fetchComments(data[0].id), 0)
+    if (data.length > 0) {
+      const params = new URLSearchParams(window.location.search)
+      const ticketId = params.get('ticket')
+      if (ticketId) {
+        const found = data.find((t: Ticket) => t.id === ticketId)
+        if (found) {
+          setSelected(found)
+          setTimeout(() => fetchComments(found.id), 0)
+          return
+        }
+      }
+      if (!selected) {
+        setSelected(data[0])
+        setTimeout(() => fetchComments(data[0].id), 0)
+      }
     }
   } finally {
     setLoading(false)

@@ -11,6 +11,14 @@ type Ticket = {
   updated_at: string
 }
 
+type Comment = {
+  id: string
+  content: string
+  is_internal: boolean
+  created_at: string
+  user_name: string
+}
+
 const statusColors: Record<Ticket['status'], string> = {
   'Avoin':       'bg-amber-500/10 text-amber-400 border-amber-500/20',
   'Työn alla':   'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -30,14 +38,22 @@ export default function CustomerPage() {
   const [priority, setPriority] = useState<'Matala' | 'Normaali' | 'Kiireellinen'>('Normaali')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-  const name = typeof window !== 'undefined' ? localStorage.getItem('name') : null
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
+  const [name, setName] = useState<string | null>(null)
 
   useEffect(() => {
+    setToken(localStorage.getItem('token'))
+    setName(localStorage.getItem('name'))
+  }, [])
+
+  useEffect(() => {
+    if (token === null) return
     if (!token) { router.push('/login'); return }
     fetchTickets()
-  }, [])
+  }, [token])
 
   async function fetchTickets() {
     setLoading(true)
@@ -53,10 +69,29 @@ export default function CustomerPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    setError('')
+  async function fetchComments(ticketId: string) {
+    setLoadingComments(true)
+    try {
+      const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
+      const data = await res.json()
+      setComments(data.filter((c: Comment) => !c.is_internal))
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
+  async function selectTicket(ticket: Ticket) {
+    setSelectedTicket(ticket)
+    setComments([])
+    await fetchComments(ticket.id)
+  }
+
+ async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault()
+  console.log('Token:', token)
+  console.log('Title:', title)
+  setSubmitting(true)
+  setError('')
     try {
       const res = await fetch(`http://localhost:8000/tickets?token=${token}`, {
         method: 'POST',
@@ -91,6 +126,8 @@ export default function CustomerPage() {
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
+
+      {/* Topbar */}
       <div className="border-b border-[#21262d] bg-[#161b22]">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -111,13 +148,15 @@ export default function CustomerPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
+
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-xl font-medium">Omat tiketit</h1>
             <p className="text-gray-500 text-sm mt-1">Seuraa IT-tukipyyntöjesi etenemistä</p>
           </div>
           <button
-            onClick={() => setView(view === 'new' ? 'tickets' : 'new')}
+            onClick={() => { setView(view === 'new' ? 'tickets' : 'new'); setSelectedTicket(null) }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -127,6 +166,7 @@ export default function CustomerPage() {
           </button>
         </div>
 
+        {/* Uusi tiketti -lomake */}
         {view === 'new' && (
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-6 mb-8">
             <h2 className="font-medium mb-6">Uusi tukipyyntö</h2>
@@ -198,6 +238,7 @@ export default function CustomerPage() {
           </div>
         )}
 
+        {/* Tikettilista */}
         {view === 'tickets' && (
           <div className="space-y-3">
             {loading ? (
@@ -216,7 +257,12 @@ export default function CustomerPage() {
               tickets.map(ticket => (
                 <div
                   key={ticket.id}
-                  className="bg-[#161b22] border border-[#21262d] rounded-xl px-6 py-4 flex items-center justify-between hover:border-[#30363d] transition-colors"
+                  onClick={() => selectTicket(ticket)}
+                  className={`bg-[#161b22] border rounded-xl px-6 py-4 flex items-center justify-between transition-colors cursor-pointer ${
+                    selectedTicket?.id === ticket.id
+                      ? 'border-blue-500/40 bg-blue-500/5'
+                      : 'border-[#21262d] hover:border-[#30363d]'
+                  }`}
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-gray-600 text-xs font-mono">{ticket.id.slice(0,8)}...</span>
@@ -227,14 +273,57 @@ export default function CustomerPage() {
                       </p>
                     </div>
                   </div>
-                  <span className={`text-xs px-3 py-1 rounded-full border ${statusColors[ticket.status as Ticket['status']]}`}>
+                  <span className={`text-xs px-3 py-1 rounded-full border ${statusColors[ticket.status]}`}>
                     {ticket.status}
                   </span>
                 </div>
               ))
             )}
+
+            {/* Kommenttihistoria */}
+            {selectedTicket && (
+              <div className="mt-4 bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-[#21262d] flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium">{selectedTicket.title}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Tiketin historia</p>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedTicket(null); setComments([]) }}
+                    className="text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {loadingComments ? (
+                  <div className="px-6 py-8 text-center text-gray-500 text-sm">Ladataan...</div>
+                ) : comments.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-gray-500 text-sm">
+                    Ei viestejä vielä — IT-tuki vastaa pian
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#21262d]">
+                    {comments.map(comment => (
+                      <div key={comment.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-blue-400">{comment.user_name || 'IT-tuki'}</span>
+                          <span className="text-xs text-gray-600">
+                            {new Date(comment.created_at).toLocaleString('fi-FI')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-300 leading-relaxed">{comment.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </div>
   )

@@ -13,12 +13,36 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
+import aiosmtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 load_dotenv()
 
 # Luo taulut jos ei ole olemassa
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CloudwebAI Helpdesk API")
+# email konffi
+async def send_email(to: str, subject: str, body: str):
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = os.getenv('SMTP_FROM')
+        msg['To'] = to
+        msg.attach(MIMEText(body, 'html'))
+
+        await aiosmtplib.send(
+            msg,
+            hostname=os.getenv('SMTP_HOST'),
+            port=int(os.getenv('SMTP_PORT', 587)),
+            username=os.getenv('SMTP_USER'),
+            password=os.getenv('SMTP_PASSWORD'),
+            start_tls=True,
+        )
+        print(f"Sähköposti lähetetty: {to}")
+    except Exception as e:
+        print(f"Sähköpostivirhe: {e}")
 
 # CORS — sallii frontendin puhua backendille
 app.add_middleware(
@@ -160,11 +184,40 @@ def get_tickets(
     } for t in tickets]
 
 @app.post("/tickets")
-def create_ticket(
-    req: TicketCreate,
-    token: str,
-    db: Session = Depends(get_db)
-):
+async def create_ticket(req: TicketCreate, token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    ticket = Ticket(
+        customer_id=user.id,
+        title=req.title,
+        description=req.description,
+        priority=req.priority,
+        status="Avoin"
+    )
+    db.add(ticket)
+    db.commit()
+    print(f"Tiketti luotu, lähetetään sähköposti: {user.email}")
+    db.refresh(ticket)
+
+    # Lähetä sähköposti-ilmoitus
+    await send_email(
+        to=user.email,
+        subject=f"Tiketti #{ticket.id} luotu — {ticket.title}",
+        body=f"""
+        <h2>Tikettisi on vastaanotettu</h2>
+        <p>Hei {user.name},</p>
+        <p>IT-tukipyyntösi on vastaanotettu ja käsitellään pian.</p>
+        <br>
+        <b>Otsikko:</b> {ticket.title}<br>
+        <b>Prioriteetti:</b> {ticket.priority}<br>
+        <b>Tila:</b> Avoin<br>
+        <br>
+        <p>Saat ilmoituksen kun tikettisi tila muuttuu.</p>
+        <br>
+        <p>Ystävällisin terveisin,<br>CloudwebAI Helpdesk</p>
+        """
+    )
+
+    return {"id": str(ticket.id), "title": ticket.title, "status": ticket.status}
     user = get_current_user(token, db)
     ticket = Ticket(
         customer_id=user.id,
@@ -392,7 +445,7 @@ def get_comments(ticket_id: str, token: str, db: Session = Depends(get_db)):
     } for c in comments]
 
 @app.post("/tickets/{ticket_id}/comments")
-def add_comment(
+async def add_comment(
     ticket_id: str,
     req: CommentCreate,
     token: str,
@@ -408,6 +461,29 @@ def add_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+
+    # Lähetä ilmoitus asiakkaalle jos julkinen kommentti
+    if not req.is_internal:
+        ticket = db.query(Ticket).filter(Ticket.id == uuid.UUID(ticket_id)).first()
+        if ticket and ticket.customer:
+            await send_email(
+                to=ticket.customer.email,
+                subject=f"IT-tuki vastasi tikettiin — {ticket.title}",
+                body=f"""
+                <h2>IT-tuki on vastannut tikettiin</h2>
+                <p>Hei {ticket.customer.name},</p>
+                <p>IT-tuki on vastannut tukipyyntöösi:</p>
+                <br>
+                <blockquote style="border-left: 3px solid #2f81f7; padding-left: 12px; color: #666;">
+                {req.content}
+                </blockquote>
+                <br>
+                <p>Kirjaudu järjestelmään nähdäksesi koko keskustelun.</p>
+                <br>
+                <p>Ystävällisin terveisin,<br>CloudwebAI Helpdesk</p>
+                """
+            )
+
     return {
         "id": str(comment.id),
         "content": comment.content,

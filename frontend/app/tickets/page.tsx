@@ -276,7 +276,7 @@ useEffect(() => {
 
               <div className="mt-5 pt-4 border-t border-[#21262d]">
                 <button
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push(`/dashboard?ticket=${selected.id}`)}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 rounded-lg text-center transition-colors"
                 >
                   Avaa dashboardissa

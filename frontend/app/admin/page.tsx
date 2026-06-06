@@ -184,13 +184,14 @@ export default function AdminPage() {
     return new Date(iso).toLocaleDateString('fi-FI')
   }
 
-  const filteredUsers = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      (u.company || '').toLowerCase().includes(search.toLowerCase())
-    const matchRole = filterRole === 'Kaikki' || u.role === filterRole
-    return matchSearch && matchRole
-  })
+ const filteredUsers = (users || []).filter(u => {
+  const matchSearch = 
+    (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.company || '').toLowerCase().includes(search.toLowerCase())
+  const matchRole = filterRole === 'Kaikki' || u.role === filterRole
+  return matchSearch && matchRole
+})
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
