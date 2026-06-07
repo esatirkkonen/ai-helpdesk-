@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Topbar from '@/components/Topbar'
 
 type Role = 'customer' | 'agent' | 'admin'
 
@@ -231,27 +232,8 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       {/* Topbar */}
-      <div className="border-b border-[#21262d] bg-[#161b22]">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="font-medium text-sm">CloudwebAI Helpdesk</span>
-          </div>
-          <nav className="flex items-center gap-6 text-sm">
-            <a href="/tickets" className="text-gray-500 hover:text-gray-300 transition-colors">Tiketit</a>
-            <a href="/dashboard" className="text-gray-500 hover:text-gray-300 transition-colors">Dashboard</a>
-            <a href="/admin" className="text-white font-medium">Admin</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">{name}</span>
-            <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">Kirjaudu ulos</button>
-          </div>
-        </div>
-      </div>
+       <Topbar activePage="admin" />
+        
 
       <div className="max-w-6xl mx-auto px-6 py-8">
 
