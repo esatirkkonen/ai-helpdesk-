@@ -26,24 +26,35 @@ app = FastAPI(title="CloudwebAI Helpdesk API")
 # email konffi
 async def send_email(to: str, subject: str, body: str):
     try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        smtp_user = os.getenv('SMTP_USER')
+        smtp_pass = os.getenv('SMTP_PASSWORD')
+        smtp_host = os.getenv('SMTP_HOST')
+        smtp_port = int(os.getenv('SMTP_PORT', 587))
+
+        print(f"SMTP User: {smtp_user}")
+        print(f"SMTP Pass length: {len(smtp_pass) if smtp_pass else 0}")
+        print(f"SMTP Host: {smtp_host}")
+        print(f"SMTP Port: {smtp_port}")
+
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = os.getenv('SMTP_FROM')
+        msg['From'] = smtp_user
         msg['To'] = to
         msg.attach(MIMEText(body, 'html'))
 
-        await aiosmtplib.send(
-            msg,
-            hostname=os.getenv('SMTP_HOST'),
-            port=int(os.getenv('SMTP_PORT', 587)),
-            username=os.getenv('SMTP_USER'),
-            password=os.getenv('SMTP_PASSWORD'),
-            start_tls=True,
-        )
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, to, msg.as_string())
+        server.quit()
         print(f"Sähköposti lähetetty: {to}")
     except Exception as e:
         print(f"Sähköpostivirhe: {e}")
-
+        
 # CORS — sallii frontendin puhua backendille
 app.add_middleware(
     CORSMiddleware,
