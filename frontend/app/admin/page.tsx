@@ -39,7 +39,7 @@ const roleLabels: Record<Role, string> = {
 }
 
 type Tab = 'users' | 'companies'
-type Modal = 'user' | 'company' | null
+type Modal = 'addUser' | 'addCompany' | 'editUser' | 'resetPassword' | 'deleteUser' | 'deleteCompany' | null
 
 export default function AdminPage() {
   const router = useRouter()
@@ -52,8 +52,10 @@ export default function AdminPage() {
   const [filterRole, setFilterRole] = useState<Role | 'Kaikki'>('Kaikki')
   const [token, setToken] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
 
-  // New user form
+  // Add user form
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [newPhone, setNewPhone] = useState('')
@@ -61,10 +63,20 @@ export default function AdminPage() {
   const [newCompanyId, setNewCompanyId] = useState('')
   const [newPassword, setNewPassword] = useState('')
 
-  // New company form
+  // Edit user form
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editRole, setEditRole] = useState<Role>('customer')
+  const [editCompanyId, setEditCompanyId] = useState('')
+
+  // Add company form
   const [newCompanyName, setNewCompanyName] = useState('')
   const [newCompanyEmail, setNewCompanyEmail] = useState('')
   const [newCompanyPhone, setNewCompanyPhone] = useState('')
+
+  // Reset password
+  const [newPasswordReset, setNewPasswordReset] = useState('')
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -108,28 +120,62 @@ export default function AdminPage() {
       const res = await fetch(`http://localhost:8000/users?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newName,
-          email: newEmail,
-          password: newPassword,
-          role: newRole,
-          phone: newPhone,
-          company_id: newCompanyId || null,
-        }),
+        body: JSON.stringify({ name: newName, email: newEmail, password: newPassword, role: newRole, phone: newPhone, company_id: newCompanyId || null }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.detail || 'Virhe käyttäjän luonnissa')
-        return
-      }
-      setSuccess('Käyttäjä lisätty!')
-      setModal(null)
-      resetUserForm()
-      await fetchUsers()
+      if (!res.ok) { const d = await res.json(); setError(d.detail || 'Virhe'); return }
+      setSuccess('Käyttäjä lisätty!'); setModal(null); resetAddUserForm(); await fetchUsers()
       setTimeout(() => setSuccess(''), 3000)
-    } catch {
-      setError('Yhteysvirhe')
-    }
+    } catch { setError('Yhteysvirhe') }
+  }
+
+  async function editUser(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedUser) return
+    setError('')
+    try {
+      const res = await fetch(`http://localhost:8000/users/${selectedUser.id}?token=${token}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone, role: editRole, company_id: editCompanyId || null }),
+      })
+      if (!res.ok) { setError('Virhe päivityksessä'); return }
+      setSuccess('Käyttäjä päivitetty!'); setModal(null); await fetchUsers()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Yhteysvirhe') }
+  }
+
+  async function resetPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedUser) return
+    setError('')
+    try {
+      const res = await fetch(`http://localhost:8000/users/${selectedUser.id}/reset-password?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password: newPasswordReset }),
+      })
+      if (!res.ok) { setError('Virhe salasanan vaihdossa'); return }
+      setSuccess('Salasana vaihdettu!'); setModal(null); setNewPasswordReset('')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Yhteysvirhe') }
+  }
+
+  async function deleteUser() {
+    if (!selectedUser) return
+    try {
+      await fetch(`http://localhost:8000/users/${selectedUser.id}?token=${token}`, { method: 'DELETE' })
+      setSuccess('Käyttäjä poistettu!'); setModal(null); await fetchUsers()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Yhteysvirhe') }
+  }
+
+  async function deleteCompany() {
+    if (!selectedCompany) return
+    try {
+      await fetch(`http://localhost:8000/companies/${selectedCompany.id}?token=${token}`, { method: 'DELETE' })
+      setSuccess('Yritys poistettu!'); setModal(null); await fetchCompanies()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Yhteysvirhe') }
   }
 
   async function addCompany(e: React.FormEvent) {
@@ -139,62 +185,52 @@ export default function AdminPage() {
       const res = await fetch(`http://localhost:8000/companies?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newCompanyName,
-          contact_email: newCompanyEmail,
-          phone: newCompanyPhone,
-        }),
+        body: JSON.stringify({ name: newCompanyName, contact_email: newCompanyEmail, phone: newCompanyPhone }),
       })
-      if (!res.ok) {
-        setError('Virhe yrityksen luonnissa')
-        return
-      }
-      setSuccess('Yritys lisätty!')
-      setModal(null)
-      resetCompanyForm()
-      await fetchCompanies()
+      if (!res.ok) { setError('Virhe yrityksen luonnissa'); return }
+      setSuccess('Yritys lisätty!'); setModal(null); resetCompanyForm(); await fetchCompanies()
       setTimeout(() => setSuccess(''), 3000)
-    } catch {
-      setError('Yhteysvirhe')
-    }
+    } catch { setError('Yhteysvirhe') }
   }
 
   async function toggleActive(userId: string) {
-    await fetch(`http://localhost:8000/users/${userId}/active?token=${token}`, {
-      method: 'PUT',
-    })
+    await fetch(`http://localhost:8000/users/${userId}/active?token=${token}`, { method: 'PUT' })
     await fetchUsers()
   }
 
-  function resetUserForm() {
-    setNewName(''); setNewEmail(''); setNewPhone('')
-    setNewPassword(''); setNewRole('customer'); setNewCompanyId('')
+  function openEditUser(user: User) {
+    setSelectedUser(user)
+    setEditName(user.name)
+    setEditEmail(user.email)
+    setEditPhone(user.phone || '')
+    setEditRole(user.role)
+    setEditCompanyId(user.company_id || '')
+    setError('')
+    setModal('editUser')
+  }
+
+  function resetAddUserForm() {
+    setNewName(''); setNewEmail(''); setNewPhone(''); setNewPassword(''); setNewRole('customer'); setNewCompanyId('')
   }
 
   function resetCompanyForm() {
     setNewCompanyName(''); setNewCompanyEmail(''); setNewCompanyPhone('')
   }
 
-  function logout() {
-    localStorage.clear()
-    router.push('/login')
-  }
+  function logout() { localStorage.clear(); router.push('/login') }
+  function formatDate(iso: string) { return new Date(iso).toLocaleDateString('fi-FI') }
 
-  function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('fi-FI')
-  }
-
- const filteredUsers = (users || []).filter(u => {
-  const matchSearch = 
-    (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
-    (u.company || '').toLowerCase().includes(search.toLowerCase())
-  const matchRole = filterRole === 'Kaikki' || u.role === filterRole
-  return matchSearch && matchRole
-})
+  const filteredUsers = (users || []).filter(u => {
+    const matchSearch = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.company || '').toLowerCase().includes(search.toLowerCase())
+    const matchRole = filterRole === 'Kaikki' || u.role === filterRole
+    return matchSearch && matchRole
+  })
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
+      {/* Topbar */}
       <div className="border-b border-[#21262d] bg-[#161b22]">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -220,17 +256,16 @@ export default function AdminPage() {
       <div className="max-w-6xl mx-auto px-6 py-8">
 
         {success && (
-          <div className="mb-4 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 text-green-400 text-sm">
-            {success}
-          </div>
+          <div className="mb-4 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 text-green-400 text-sm">{success}</div>
         )}
 
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Käyttäjiä yhteensä', value: users.length },
-            { label: 'Asiakkaita', value: users.filter(u => u.role === 'customer').length },
-            { label: 'Agentteja', value: users.filter(u => u.role === 'agent').length },
-            { label: 'Yrityksiä', value: companies.length },
+            { label: 'Käyttäjiä yhteensä', value: (users || []).length },
+            { label: 'Asiakkaita', value: (users || []).filter(u => u.role === 'customer').length },
+            { label: 'Agentteja', value: (users || []).filter(u => u.role === 'agent').length },
+            { label: 'Yrityksiä', value: (companies || []).length },
           ].map(stat => (
             <div key={stat.label} className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
               <div className="text-2xl font-medium">{stat.value}</div>
@@ -239,22 +274,18 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {/* Tabs */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex gap-1 bg-[#161b22] border border-[#21262d] rounded-lg p-1">
             {(['users', 'companies'] as Tab[]).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  tab === t ? 'bg-[#0d1117] text-white' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === t ? 'bg-[#0d1117] text-white' : 'text-gray-500 hover:text-gray-300'}`}>
                 {t === 'users' ? 'Käyttäjät' : 'Yritykset'}
               </button>
             ))}
           </div>
           <button
-            onClick={() => { setError(''); setModal(tab === 'users' ? 'user' : 'company') }}
+            onClick={() => { setError(''); setModal(tab === 'users' ? 'addUser' : 'addCompany') }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -264,6 +295,7 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Users tab */}
         {tab === 'users' && (
           <>
             <div className="flex gap-3 mb-4">
@@ -271,25 +303,14 @@ export default function AdminPage() {
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                 </svg>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
+                <input type="text" value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="Hae nimellä, sähköpostilla tai yrityksellä..."
-                  className="w-full bg-[#161b22] border border-[#21262d] text-white rounded-lg pl-10 pr-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-                />
+                  className="w-full bg-[#161b22] border border-[#21262d] text-white rounded-lg pl-10 pr-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
               <div className="flex gap-2">
                 {(['Kaikki', 'customer', 'agent', 'admin'] as const).map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setFilterRole(r)}
-                    className={`px-3 py-2 rounded-lg text-xs border transition-colors ${
-                      filterRole === r
-                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-                        : 'border-[#21262d] text-gray-500 hover:border-[#30363d]'
-                    }`}
-                  >
+                  <button key={r} onClick={() => setFilterRole(r)}
+                    className={`px-3 py-2 rounded-lg text-xs border transition-colors ${filterRole === r ? 'bg-blue-500/10 border-blue-500/40 text-blue-400' : 'border-[#21262d] text-gray-500 hover:border-[#30363d]'}`}>
                     {r === 'Kaikki' ? 'Kaikki' : roleLabels[r]}
                   </button>
                 ))}
@@ -308,8 +329,8 @@ export default function AdminPage() {
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Puhelin</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Rooli</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Yritys</th>
-                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Luotu</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Tila</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Toiminnot</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -324,18 +345,27 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-400">{user.company || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{formatDate(user.created_at)}</td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => toggleActive(user.id)}
-                            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                              user.active
-                                ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20'
-                                : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20'
-                            }`}
-                          >
+                          <button onClick={() => toggleActive(user.id)}
+                            className={`text-xs px-3 py-1 rounded-full border transition-colors ${user.active ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                             {user.active ? 'Aktiivinen' : 'Ei aktiivinen'}
                           </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => openEditUser(user)}
+                              className="text-xs px-2 py-1 border border-[#30363d] text-gray-400 hover:text-white hover:border-[#484f58] rounded-md transition-colors">
+                              Muokkaa
+                            </button>
+                            <button onClick={() => { setSelectedUser(user); setError(''); setModal('resetPassword') }}
+                              className="text-xs px-2 py-1 border border-[#30363d] text-gray-400 hover:text-amber-400 hover:border-amber-500/40 rounded-md transition-colors">
+                              Salasana
+                            </button>
+                            <button onClick={() => { setSelectedUser(user); setModal('deleteUser') }}
+                              className="text-xs px-2 py-1 border border-[#30363d] text-gray-400 hover:text-red-400 hover:border-red-500/40 rounded-md transition-colors">
+                              Poista
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -346,6 +376,7 @@ export default function AdminPage() {
           </>
         )}
 
+        {/* Companies tab */}
         {tab === 'companies' && (
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
             <table className="w-full">
@@ -356,16 +387,23 @@ export default function AdminPage() {
                   <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Puhelin</th>
                   <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Käyttäjiä</th>
                   <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Luotu</th>
+                  <th className="text-left px-4 py-3 text-xs text-gray-500 font-medium">Toiminnot</th>
                 </tr>
               </thead>
               <tbody>
-                {companies.map(company => (
+                {(companies || []).map(company => (
                   <tr key={company.id} className="border-b border-[#21262d] last:border-0 hover:bg-[#1c2128] transition-colors">
                     <td className="px-4 py-3 text-sm font-medium">{company.name}</td>
                     <td className="px-4 py-3 text-sm text-blue-400">{company.contact_email || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-400">{company.phone || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-400">{company.user_count}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(company.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => { setSelectedCompany(company); setModal('deleteCompany') }}
+                        className="text-xs px-2 py-1 border border-[#30363d] text-gray-400 hover:text-red-400 hover:border-red-500/40 rounded-md transition-colors">
+                        Poista
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -374,16 +412,13 @@ export default function AdminPage() {
         )}
       </div>
 
-      {modal === 'user' && (
+      {/* Modal: Add user */}
+      {modal === 'addUser' && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
               <h2 className="font-medium">Lisää käyttäjä</h2>
-              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">✕</button>
             </div>
             <form onSubmit={addUser} className="p-6 space-y-4">
               {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5 text-red-400 text-sm">{error}</div>}
@@ -418,7 +453,7 @@ export default function AdminPage() {
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Yritys</label>
-                <select value={newCompanyId} onChange={e => setNewCompanyId(e.target.value)} required
+                <select value={newCompanyId} onChange={e => setNewCompanyId(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
                   <option value="">— Valitse yritys —</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -426,29 +461,137 @@ export default function AdminPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setModal(null)}
-                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
-                  Peruuta
-                </button>
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
                 <button type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
-                  Lisää käyttäjä
-                </button>
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Lisää käyttäjä</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {modal === 'company' && (
+      {/* Modal: Edit user */}
+      {modal === 'editUser' && selectedUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
+              <h2 className="font-medium">Muokkaa käyttäjää</h2>
+              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
+            <form onSubmit={editUser} className="p-6 space-y-4">
+              {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5 text-red-400 text-sm">{error}</div>}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Nimi</label>
+                <input value={editName} onChange={e => setEditName(e.target.value)} required
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Sähköposti</label>
+                <input value={editEmail} onChange={e => setEditEmail(e.target.value)} required type="email"
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Puhelin</label>
+                <input value={editPhone} onChange={e => setEditPhone(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Rooli</label>
+                <select value={editRole} onChange={e => setEditRole(e.target.value as Role)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                  <option value="customer">Asiakas</option>
+                  <option value="agent">Agentti</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Yritys</label>
+                <select value={editCompanyId} onChange={e => setEditCompanyId(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                  <option value="">— Valitse yritys —</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setModal(null)}
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
+                <button type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Tallenna</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reset password */}
+      {modal === 'resetPassword' && selectedUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
+              <h2 className="font-medium">Vaihda salasana — {selectedUser.name}</h2>
+              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
+            <form onSubmit={resetPassword} className="p-6 space-y-4">
+              {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5 text-red-400 text-sm">{error}</div>}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Uusi salasana</label>
+                <input value={newPasswordReset} onChange={e => setNewPasswordReset(e.target.value)} required type="password" placeholder="••••••••"
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-amber-500 transition-colors" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setModal(null)}
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
+                <button type="submit"
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Vaihda salasana</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete user */}
+      {modal === 'deleteUser' && selectedUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-sm">
+            <div className="p-6">
+              <h2 className="font-medium text-red-400 mb-2">Poista käyttäjä</h2>
+              <p className="text-sm text-gray-400 mb-6">Haluatko varmasti poistaa käyttäjän <strong className="text-white">{selectedUser.name}</strong>? Tätä ei voi peruuttaa.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setModal(null)}
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
+                <button onClick={deleteUser}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Poista</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete company */}
+      {modal === 'deleteCompany' && selectedCompany && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-sm">
+            <div className="p-6">
+              <h2 className="font-medium text-red-400 mb-2">Poista yritys</h2>
+              <p className="text-sm text-gray-400 mb-6">Haluatko varmasti poistaa yrityksen <strong className="text-white">{selectedCompany.name}</strong>?</p>
+              <div className="flex gap-3">
+                <button onClick={() => setModal(null)}
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
+                <button onClick={deleteCompany}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Poista</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add company */}
+      {modal === 'addCompany' && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
               <h2 className="font-medium">Lisää yritys</h2>
-              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300">✕</button>
             </div>
             <form onSubmit={addCompany} className="p-6 space-y-4">
               {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5 text-red-400 text-sm">{error}</div>}
@@ -469,13 +612,9 @@ export default function AdminPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setModal(null)}
-                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
-                  Peruuta
-                </button>
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">Peruuta</button>
                 <button type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
-                  Lisää yritys
-                </button>
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">Lisää yritys</button>
               </div>
             </form>
           </div>

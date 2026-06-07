@@ -503,3 +503,65 @@ async def add_comment(
         "user_id": str(user.id),
         "user_name": user.name,
     }
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    company_id: Optional[str] = None
+
+class PasswordReset(BaseModel):
+    new_password: str
+
+@app.put("/users/{user_id}")
+def update_user(user_id: str, req: UserUpdate, token: str, db: Session = Depends(get_db)):
+    admin = get_current_user(token, db)
+    if admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Käyttäjää ei löydy")
+    if req.name: user.name = req.name
+    if req.email: user.email = req.email
+    if req.phone: user.phone = req.phone
+    if req.role: user.role = req.role
+    if req.company_id: user.company_id = uuid.UUID(req.company_id)
+    db.commit()
+    return {"status": "päivitetty"}
+
+@app.post("/users/{user_id}/reset-password")
+def reset_password(user_id: str, req: PasswordReset, token: str, db: Session = Depends(get_db)):
+    admin = get_current_user(token, db)
+    if admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Käyttäjää ei löydy")
+    user.password_hash = hash_password(req.new_password)
+    db.commit()
+    return {"status": "salasana vaihdettu"}
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: str, token: str, db: Session = Depends(get_db)):
+    admin = get_current_user(token, db)
+    if admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Käyttäjää ei löydy")
+    db.delete(user)
+    db.commit()
+    return {"status": "poistettu"}
+
+@app.delete("/companies/{company_id}")
+def delete_company(company_id: str, token: str, db: Session = Depends(get_db)):
+    admin = get_current_user(token, db)
+    if admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    company = db.query(Company).filter(Company.id == uuid.UUID(company_id)).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Yritystä ei löydy")
+    db.delete(company)
+    db.commit()
+    return {"status": "poistettu"}
