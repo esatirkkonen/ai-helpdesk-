@@ -259,7 +259,8 @@ def update_status(
     ticket.updated_at = datetime.utcnow()
 
     # Ajanlasku logiikka
-    if req.status == "Työn alla" and old_status != "Työn alla":
+    # Ajanlasku logiikka ITIL
+    if req.status == "Käsittelyssä" and old_status != "Käsittelyssä":
         if not ticket.started_at:
             ticket.started_at = datetime.utcnow()
         time_log = TimeLog(
@@ -270,7 +271,7 @@ def update_status(
         )
         db.add(time_log)
 
-    elif req.status in ["Odottaa", "Valmis", "Keskeytetty"] and old_status == "Työn alla":
+    elif req.status in ["Odottaa", "Ratkaistu", "Suljettu"] and old_status == "Käsittelyssä":
         log = db.query(TimeLog).filter(
             TimeLog.ticket_id == ticket.id,
             TimeLog.stopped_at == None
@@ -279,7 +280,7 @@ def update_status(
             log.stopped_at = datetime.utcnow()
             log.seconds = int((log.stopped_at - log.started_at).total_seconds())
 
-        if req.status == "Valmis":
+        if req.status in ["Ratkaistu", "Suljettu"]:
             ticket.resolved_at = datetime.utcnow()
             total = db.query(TimeLog).filter(TimeLog.ticket_id == ticket.id).all()
             ticket.time_spent_seconds = sum(l.seconds or 0 for l in total)

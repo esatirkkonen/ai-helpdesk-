@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
 
 
-type Status = 'Avoin' | 'Työn alla' | 'Odottaa' | 'Valmis' | 'Keskeytetty'
+type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
 type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
 
 type Ticket = {
@@ -41,18 +41,20 @@ type Comment = {
 }
 
 const statusColors: Record<Status, string> = {
-  'Avoin':       'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  'Työn alla':   'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  'Odottaa':     'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  'Valmis':      'bg-green-500/10 text-green-400 border-green-500/20',
-  'Keskeytetty': 'bg-red-500/10 text-red-400 border-red-500/20',
+  'Uusi':         'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  'Luokiteltu':   'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  'Käsittelyssä': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  'Odottaa':      'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  'Ratkaistu':    'bg-green-500/10 text-green-400 border-green-500/20',
+  'Suljettu':     'bg-gray-500/10 text-gray-300 border-gray-500/20',
 }
 
 const priorityColors: Record<Priority, string> = {
-  'Matala':      'text-green-400',
-  'Normaali':    'text-blue-400',
-  'Kiireellinen':'text-red-400',
+  'Matala':       'text-green-400',
+  'Normaali':     'text-blue-400',
+  'Kiireellinen': 'text-red-400',
 }
+
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
@@ -66,8 +68,9 @@ function formatDate(iso: string) {
 }
 
 export default function DashboardPage() {
-  const router = useRouter()
+ const router = useRouter()
   const [tickets, setTickets] = useState<Ticket[]>([])
+  const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<Ticket | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,32 +98,32 @@ export default function DashboardPage() {
   }, [token])
 
   async function fetchTickets() {
-  setLoading(true)
-  try {
-    const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
-    if (res.status === 401) { router.push('/login'); return }
-    const data = await res.json()
-    setTickets(data)
-    if (data.length > 0) {
-      const params = new URLSearchParams(window.location.search)
-      const ticketId = params.get('ticket')
-      if (ticketId) {
-        const found = data.find((t: Ticket) => t.id === ticketId)
-        if (found) {
-          setSelected(found)
-          setTimeout(() => fetchComments(found.id), 0)
-          return
+    setLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
+      if (res.status === 401) { router.push('/login'); return }
+      const data = await res.json()
+      setTickets(data)
+      if (data.length > 0) {
+        const params = new URLSearchParams(window.location.search)
+        const ticketId = params.get('ticket')
+        if (ticketId) {
+          const found = data.find((t: Ticket) => t.id === ticketId)
+          if (found) {
+            setSelected(found)
+            setTimeout(() => fetchComments(found.id), 0)
+            return
+          }
+        }
+        if (!selected) {
+          setSelected(data[0])
+          setTimeout(() => fetchComments(data[0].id), 0)
         }
       }
-      if (!selected) {
-        setSelected(data[0])
-        setTimeout(() => fetchComments(data[0].id), 0)
-      }
+    } finally {
+      setLoading(false)
     }
-  } finally {
-    setLoading(false)
   }
-}
 
   async function fetchAgents() {
     const res = await fetch(`http://localhost:8000/agents?token=${token}`)
@@ -129,9 +132,10 @@ export default function DashboardPage() {
   }
 
   async function fetchComments(ticketId: string) {
+    console.log('Fetching comments for ticket:', ticketId)
     const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
     const data = await res.json()
-     console.log('Comments received:', data)
+    console.log('Comments received:', data)
     setComments(data)
   }
 
@@ -146,8 +150,8 @@ export default function DashboardPage() {
       const updated = { ...selected, status }
       setSelected(updated)
       setTickets(tickets.map(t => t.id === selected.id ? updated : t))
-      if (status === 'Työn alla') startTimer(selected.id)
-      else if (['Odottaa', 'Valmis', 'Keskeytetty'].includes(status)) stopTimer(selected.id)
+      if (status === 'Käsittelyssä') startTimer(selected.id)
+      else if (['Odottaa', 'Ratkaistu', 'Suljettu'].includes(status)) stopTimer(selected.id)
     }
   }
 
@@ -211,26 +215,21 @@ export default function DashboardPage() {
   }
 
   function selectTicket(ticket: Ticket) {
-  setSelected(ticket)
-  setReply('')
-  setInternalNote('')
-  setComments([])
-  setTimeout(() => fetchComments(ticket.id), 0)
-}
-
-  function logout() {
-    localStorage.clear()
-    router.push('/login')
+    setSelected(ticket)
+    setReply('')
+    setInternalNote('')
+    setComments([])
+    setTimeout(() => fetchComments(ticket.id), 0)
   }
 
   const currentTime = selected ? (timers[selected.id] || 0) + selected.time_spent_seconds : 0
   const isRunning = selected ? (running[selected.id] || false) : false
   const myTickets = tickets.filter(t => t.agent === name)
-  const openTickets = tickets.filter(t => t.status === 'Avoin')
+  const openTickets = tickets.filter(t => t.status === 'Uusi' || t.status === 'Luokiteltu')
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
-    <Topbar activePage="dashboard" />
+      <Topbar activePage="dashboard" />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
@@ -239,7 +238,7 @@ export default function DashboardPage() {
             <div className="flex gap-3 text-xs">
               <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg flex-1 text-center">
                 <div className="font-medium text-lg">{openTickets.length}</div>
-                <div>Avoimet</div>
+                <div>Uudet</div>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-2 rounded-lg flex-1 text-center">
                 <div className="font-medium text-lg">{myTickets.length}</div>
@@ -248,13 +247,39 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Suodatin */}
+<div className="px-4 pb-3 flex gap-2">
+  <button
+    onClick={() => setFilter('all')}
+    className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
+      filter === 'all'
+        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+        : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+    }`}
+  >
+    Kaikki tiketit
+  </button>
+  <button
+    onClick={() => setFilter('mine')}
+    className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
+      filter === 'mine'
+        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+        : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+    }`}
+  >
+    Omat tiketit
+  </button>
+</div>
+
           <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="text-center text-gray-500 py-8 text-sm">Ladataan...</div>
-            ) : tickets.length === 0 ? (
-              <div className="text-center text-gray-500 py-8 text-sm">Ei tikettejä</div>
-            ) : (
-              tickets.map(ticket => (
+           {loading ? (
+  <div className="text-center text-gray-500 py-8 text-sm">Ladataan...</div>
+) : tickets.filter(t => filter === 'all' || t.agent === name).length === 0 ? (
+  <div className="text-center text-gray-500 py-8 text-sm">Ei tikettejä</div>
+) : (
+  tickets
+    .filter(t => filter === 'all' || t.agent === name)
+    .map(ticket => (
                 <div
                   key={ticket.id}
                   onClick={() => selectTicket(ticket)}
@@ -318,7 +343,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-gray-500 mb-2">Vaihda tila</p>
                     <div className="flex flex-wrap gap-2">
-                      {(['Avoin', 'Työn alla', 'Odottaa', 'Valmis', 'Keskeytetty'] as Status[]).map(s => (
+                      {(['Uusi', 'Luokiteltu', 'Käsittelyssä', 'Odottaa', 'Ratkaistu', 'Suljettu'] as Status[]).map(s => (
                         <button
                           key={s}
                           onClick={() => updateStatus(s)}

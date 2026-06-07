@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
 type Props = {
   activePage: 'tickets' | 'dashboard' | 'admin' | 'customer'
@@ -8,8 +9,13 @@ type Props = {
 
 export default function Topbar({ activePage }: Props) {
   const router = useRouter()
-  const role = typeof window !== 'undefined' ? localStorage.getItem('role') : null
-  const name = typeof window !== 'undefined' ? localStorage.getItem('name') : null
+ const [role, setRole] = useState<string | null>(null)
+const [name, setName] = useState<string | null>(null)
+
+useEffect(() => {
+  setRole(localStorage.getItem('role'))
+  setName(localStorage.getItem('name'))
+}, [])
 
   function logout() {
     localStorage.clear()
