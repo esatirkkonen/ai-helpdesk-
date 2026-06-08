@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
 
-
 type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
 type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
 
@@ -14,6 +13,7 @@ type Ticket = {
   description: string
   status: Status
   priority: Priority
+  ticket_type: string
   customer: string
   customer_email: string
   customer_phone: string
@@ -55,6 +55,12 @@ const priorityColors: Record<Priority, string> = {
   'Kiireellinen': 'text-red-400',
 }
 
+const typeColors: Record<string, string> = {
+  'Incident':       'bg-red-500/10 text-red-400 border-red-500/20',
+  'Service Request':'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  'Problem':        'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  'Change':         'bg-purple-500/10 text-purple-400 border-purple-500/20',
+}
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
@@ -68,9 +74,8 @@ function formatDate(iso: string) {
 }
 
 export default function DashboardPage() {
- const router = useRouter()
+  const router = useRouter()
   const [tickets, setTickets] = useState<Ticket[]>([])
-  const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<Ticket | null>(null)
   const [loading, setLoading] = useState(true)
@@ -80,8 +85,12 @@ export default function DashboardPage() {
   const [running, setRunning] = useState<Record<string, boolean>>({})
   const [comments, setComments] = useState<Comment[]>([])
   const [internalNote, setInternalNote] = useState('')
+  const [filter, setFilter] = useState<'all' | 'mine'>('all')
   const [token, setToken] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const [showTypeModal, setShowTypeModal] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
+  const [ticketType, setTicketType] = useState('Incident')
   const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
 
   useEffect(() => {
@@ -132,15 +141,18 @@ export default function DashboardPage() {
   }
 
   async function fetchComments(ticketId: string) {
-    console.log('Fetching comments for ticket:', ticketId)
     const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
     const data = await res.json()
-    console.log('Comments received:', data)
     setComments(data)
   }
 
   async function updateStatus(status: Status) {
     if (!selected) return
+    if (status === 'Luokiteltu') {
+      setPendingStatus(status)
+      setShowTypeModal(true)
+      return
+    }
     const res = await fetch(`http://localhost:8000/tickets/${selected.id}/status?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -153,6 +165,27 @@ export default function DashboardPage() {
       if (status === 'Käsittelyssä') startTimer(selected.id)
       else if (['Odottaa', 'Ratkaistu', 'Suljettu'].includes(status)) stopTimer(selected.id)
     }
+  }
+
+  async function confirmClassification() {
+    if (!selected || !pendingStatus) return
+    await fetch(`http://localhost:8000/tickets/${selected.id}/type?token=${token}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket_type: ticketType }),
+    })
+    const res = await fetch(`http://localhost:8000/tickets/${selected.id}/status?token=${token}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: pendingStatus }),
+    })
+    if (res.ok) {
+      const updated = { ...selected, status: pendingStatus, ticket_type: ticketType }
+      setSelected(updated)
+      setTickets(tickets.map(t => t.id === selected.id ? updated : t))
+    }
+    setShowTypeModal(false)
+    setPendingStatus(null)
   }
 
   async function updateAgent(agentId: string) {
@@ -235,7 +268,7 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <div className="w-72 border-r border-[#21262d] bg-[#161b22] flex flex-col flex-shrink-0">
           <div className="p-4 border-b border-[#21262d]">
-            <div className="flex gap-3 text-xs">
+            <div className="flex gap-3 text-xs mb-3">
               <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg flex-1 text-center">
                 <div className="font-medium text-lg">{openTickets.length}</div>
                 <div>Uudet</div>
@@ -245,65 +278,70 @@ export default function DashboardPage() {
                 <div>Minulla</div>
               </div>
             </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
+                  filter === 'all'
+                    ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+                }`}
+              >
+                Kaikki
+              </button>
+              <button
+                onClick={() => setFilter('mine')}
+                className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
+                  filter === 'mine'
+                    ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+                }`}
+              >
+                Omat
+              </button>
+            </div>
           </div>
 
-          {/* Suodatin */}
-<div className="px-4 pb-3 flex gap-2">
-  <button
-    onClick={() => setFilter('all')}
-    className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
-      filter === 'all'
-        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-        : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
-    }`}
-  >
-    Kaikki tiketit
-  </button>
-  <button
-    onClick={() => setFilter('mine')}
-    className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
-      filter === 'mine'
-        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-        : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
-    }`}
-  >
-    Omat tiketit
-  </button>
-</div>
-
           <div className="flex-1 overflow-y-auto">
-           {loading ? (
-  <div className="text-center text-gray-500 py-8 text-sm">Ladataan...</div>
-) : tickets.filter(t => filter === 'all' || t.agent === name).length === 0 ? (
-  <div className="text-center text-gray-500 py-8 text-sm">Ei tikettejä</div>
-) : (
-  tickets
-    .filter(t => filter === 'all' || t.agent === name)
-    .map(ticket => (
-                <div
-                  key={ticket.id}
-                  onClick={() => selectTicket(ticket)}
-                  className={`p-4 border-b border-[#21262d] cursor-pointer transition-colors ${
-                    selected?.id === ticket.id
-                      ? 'bg-blue-500/5 border-l-2 border-l-blue-500 pl-3.5'
-                      : 'hover:bg-[#1c2128]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[ticket.status]}`}>
-                      {ticket.status}
-                    </span>
-                    {running[ticket.id] && (
-                      <span className="text-xs text-blue-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
-                        {formatTime((timers[ticket.id] || 0) + ticket.time_spent_seconds)}
+            {loading ? (
+              <div className="text-center text-gray-500 py-8 text-sm">Ladataan...</div>
+            ) : tickets.filter(t => filter === 'all' || t.agent === name).length === 0 ? (
+              <div className="text-center text-gray-500 py-8 text-sm">Ei tikettejä</div>
+            ) : (
+              tickets
+                .filter(t => filter === 'all' || t.agent === name)
+                .map(ticket => (
+                  <div
+                    key={ticket.id}
+                    onClick={() => selectTicket(ticket)}
+                    className={`p-4 border-b border-[#21262d] cursor-pointer transition-colors ${
+                      selected?.id === ticket.id
+                        ? 'bg-blue-500/5 border-l-2 border-l-blue-500 pl-3.5'
+                        : 'hover:bg-[#1c2128]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[ticket.status]}`}>
+                        {ticket.status}
                       </span>
-                    )}
+                      {running[ticket.id] && (
+                        <span className="text-xs text-blue-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
+                          {formatTime((timers[ticket.id] || 0) + ticket.time_spent_seconds)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium truncate mt-1">{ticket.title}</p>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className="text-xs text-gray-500">{ticket.customer}</p>
+                      {ticket.ticket_type && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded border ${typeColors[ticket.ticket_type] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                          {ticket.ticket_type}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm font-medium truncate mt-1">{ticket.title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{ticket.customer}</p>
-                </div>
-              ))
+                ))
             )}
           </div>
         </div>
@@ -316,13 +354,18 @@ export default function DashboardPage() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-xs px-2.5 py-0.5 rounded-full border ${statusColors[selected.status]}`}>
                       {selected.status}
                     </span>
                     <span className={`text-xs font-medium ${priorityColors[selected.priority]}`}>
                       {selected.priority}
                     </span>
+                    {selected.ticket_type && (
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full border ${typeColors[selected.ticket_type] || ''}`}>
+                        {selected.ticket_type}
+                      </span>
+                    )}
                   </div>
                   <h1 className="text-lg font-medium">{selected.title}</h1>
                   <p className="text-xs text-gray-500 mt-1">Luotu {formatDate(selected.created_at)}</p>
@@ -500,6 +543,54 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Tikettityyppi-modaali */}
+      {showTypeModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-[#21262d]">
+              <h2 className="font-medium">Luokittele tiketti</h2>
+              <p className="text-xs text-gray-500 mt-1">Valitse tikettityyppi ennen luokittelua</p>
+            </div>
+            <div className="p-6 space-y-3">
+              {[
+                { type: 'Incident', desc: 'Jokin ei toimi — häiriö', color: 'border-red-500/40 text-red-400 bg-red-500/5' },
+                { type: 'Service Request', desc: 'Uusi pyyntö — asennus, käyttäjätunnus', color: 'border-blue-500/40 text-blue-400 bg-blue-500/5' },
+                { type: 'Problem', desc: 'Toistuva häiriö — juurisyyn selvitys', color: 'border-amber-500/40 text-amber-400 bg-amber-500/5' },
+                { type: 'Change', desc: 'Inframuutos — päivitys, laitevaihto', color: 'border-purple-500/40 text-purple-400 bg-purple-500/5' },
+              ].map(({ type, desc, color }) => (
+                <button
+                  key={type}
+                  onClick={() => setTicketType(type)}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                    ticketType === type
+                      ? color
+                      : 'border-[#30363d] text-gray-400 hover:border-[#484f58]'
+                  }`}
+                >
+                  <div className="font-medium text-sm">{type}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => { setShowTypeModal(false); setPendingStatus(null) }}
+                className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors"
+              >
+                Peruuta
+              </button>
+              <button
+                onClick={confirmClassification}
+                className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
+              >
+                Luokittele tiketti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

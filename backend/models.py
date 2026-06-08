@@ -38,6 +38,7 @@ class Ticket(Base):
     description = Column(Text)
     status = Column(String(20), default="Avoin")
     priority = Column(String(20), default="Normaali")
+    ticket_type = Column(String(50), default="Incident")
     time_spent_seconds = Column(Integer, default=0)
     started_at = Column(DateTime, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
@@ -48,6 +49,7 @@ class Ticket(Base):
     comments = relationship("Comment", back_populates="ticket")
     time_logs = relationship("TimeLog", back_populates="ticket")
     ai_suggestions = relationship("AISuggestion", back_populates="ticket")
+    
 
 class TimeLog(Base):
     __tablename__ = "time_logs"

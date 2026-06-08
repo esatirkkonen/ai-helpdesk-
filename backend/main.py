@@ -23,6 +23,16 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CloudwebAI Helpdesk API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # email konffi
 async def send_email(to: str, subject: str, body: str):
     try:
@@ -57,8 +67,9 @@ async def send_email(to: str, subject: str, body: str):
         
 # CORS — sallii frontendin puhua backendille
 app.add_middleware(
+    
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -189,6 +200,7 @@ def get_tickets(
         "company": t.customer.company.name if t.customer and t.customer.company else None,
         "agent": t.agent.name if t.agent else None,
         "agent_id": str(t.agent_id) if t.agent_id else None,
+        "ticket_type": t.ticket_type,
         "time_spent_seconds": t.time_spent_seconds,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
@@ -566,3 +578,22 @@ def delete_company(company_id: str, token: str, db: Session = Depends(get_db)):
     db.delete(company)
     db.commit()
     return {"status": "poistettu"}
+
+class TicketTypeUpdate(BaseModel):
+    ticket_type: str
+
+@app.put("/tickets/{ticket_id}/type")
+def update_ticket_type(
+    ticket_id: str,
+    req: TicketTypeUpdate,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(token, db)
+    ticket = db.query(Ticket).filter(Ticket.id == uuid.UUID(ticket_id)).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Tiketti ei löydy")
+    ticket.ticket_type = req.ticket_type
+    ticket.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ticket_type": ticket.ticket_type}
