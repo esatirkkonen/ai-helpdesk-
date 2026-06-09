@@ -29,6 +29,17 @@ class User(Base):
     tickets_created = relationship("Ticket", foreign_keys="Ticket.customer_id", back_populates="customer")
     tickets_assigned = relationship("Ticket", foreign_keys="Ticket.agent_id", back_populates="agent")
 
+class SLAPolicy(Base):
+    __tablename__ = "sla_policies"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"))
+    name = Column(String(100), nullable=False)
+    priority = Column(String(20), nullable=False)
+    first_response_minutes = Column(Integer, nullable=False)
+    resolution_minutes = Column(Integer, nullable=False)
+    business_hours_only = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Ticket(Base):
     __tablename__ = "tickets"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -40,6 +51,11 @@ class Ticket(Base):
     priority = Column(String(20), default="Normaali")
     ticket_type = Column(String(50), default="Incident")
     time_spent_seconds = Column(Integer, default=0)
+    sla_policy_id = Column(UUID(as_uuid=True), ForeignKey("sla_policies.id"), nullable=True)
+    first_response_deadline = Column(DateTime, nullable=True)
+    resolution_deadline = Column(DateTime, nullable=True)
+    first_response_at = Column(DateTime, nullable=True)
+    sla_breached = Column(Boolean, default=False)
     started_at = Column(DateTime, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

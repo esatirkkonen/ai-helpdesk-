@@ -23,6 +23,9 @@ type Ticket = {
   time_spent_seconds: number
   created_at: string
   updated_at: string
+  first_response_deadline: string | null
+  resolution_deadline: string | null
+  sla_breached: boolean
 }
 
 type Agent = {
@@ -67,6 +70,24 @@ function formatTime(seconds: number) {
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
   return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
+}
+
+function getSLAStatus(deadline: string | null): { percent: number; color: string; label: string } {
+  if (!deadline) return { percent: 0, color: '', label: '' }
+  
+  const now = new Date()
+  const end = new Date(deadline)
+  const diff = end.getTime() - now.getTime()
+  
+  if (diff <= 0) return { percent: 100, color: 'bg-red-500', label: 'SLA rikottu!' }
+  
+  // Lasketaan kuinka paljon ajasta on kulunut
+  const total = end.getTime() - (end.getTime() - diff)
+  const percent = Math.min(100, Math.max(0, ((1 - diff / (24 * 60 * 60 * 1000)) * 100)))
+  
+  if (percent >= 90) return { percent, color: 'bg-red-500', label: `${Math.floor(diff / 60000)} min jäljellä` }
+  if (percent >= 75) return { percent, color: 'bg-amber-500', label: `${Math.floor(diff / 3600000)}h jäljellä` }
+  return { percent, color: 'bg-green-500', label: `${Math.floor(diff / 3600000)}h jäljellä` }
 }
 
 function formatDate(iso: string) {
@@ -439,6 +460,60 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {/* SLA */}
+{(selected.resolution_deadline || selected.first_response_deadline) && (
+  <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+    <p className="text-xs text-gray-500 mb-3">SLA-seuranta</p>
+    <div className="space-y-3">
+      {selected.first_response_deadline && (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-400">Ensivastaus</span>
+            <span className={`text-xs font-medium ${
+              getSLAStatus(selected.first_response_deadline).color === 'bg-red-500' ? 'text-red-400' :
+              getSLAStatus(selected.first_response_deadline).color === 'bg-amber-500' ? 'text-amber-400' :
+              'text-green-400'
+            }`}>
+              {getSLAStatus(selected.first_response_deadline).label}
+            </span>
+          </div>
+          <div className="w-full bg-[#21262d] rounded-full h-1.5">
+            <div
+              className={`h-1.5 rounded-full transition-all ${getSLAStatus(selected.first_response_deadline).color}`}
+              style={{ width: `${getSLAStatus(selected.first_response_deadline).percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {selected.resolution_deadline && (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-400">Ratkaisu</span>
+            <span className={`text-xs font-medium ${
+              getSLAStatus(selected.resolution_deadline).color === 'bg-red-500' ? 'text-red-400' :
+              getSLAStatus(selected.resolution_deadline).color === 'bg-amber-500' ? 'text-amber-400' :
+              'text-green-400'
+            }`}>
+              {getSLAStatus(selected.resolution_deadline).label}
+            </span>
+          </div>
+          <div className="w-full bg-[#21262d] rounded-full h-1.5">
+            <div
+              className={`h-1.5 rounded-full transition-all ${getSLAStatus(selected.resolution_deadline).color}`}
+              style={{ width: `${getSLAStatus(selected.resolution_deadline).percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {selected.sla_breached && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400 text-xs font-medium">
+          ⚠️ SLA rikottu!
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
               {/* Ongelma */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">

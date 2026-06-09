@@ -6,7 +6,7 @@ from typing import Optional
 import uuid
 
 from database import get_db, engine
-from models import Base, User, Company, Ticket, TimeLog, Comment, AISuggestion
+from models import Base, User, Company, Ticket, TimeLog, Comment, AISuggestion, SLAPolicy
 import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ import os
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 
 load_dotenv()
 
@@ -93,6 +94,7 @@ class TicketCreate(BaseModel):
     title: str
     description: str
     priority: str = "Normaali"
+    ticket_type: str = "Incident"
 
 class TicketStatusUpdate(BaseModel):
     status: str
@@ -201,6 +203,9 @@ def get_tickets(
         "agent": t.agent.name if t.agent else None,
         "agent_id": str(t.agent_id) if t.agent_id else None,
         "ticket_type": t.ticket_type,
+        "first_response_deadline": t.first_response_deadline.isoformat() if t.first_response_deadline else None,
+        "resolution_deadline": t.resolution_deadline.isoformat() if t.resolution_deadline else None,
+        "sla_breached": t.sla_breached,
         "time_spent_seconds": t.time_spent_seconds,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
@@ -209,13 +214,28 @@ def get_tickets(
 @app.post("/tickets")
 async def create_ticket(req: TicketCreate, token: str, db: Session = Depends(get_db)):
     user = get_current_user(token, db)
+    
+    # Hae SLA-politiikka yrityksen ja prioriteetin mukaan
+    sla = None
+    if user.company_id:
+        sla = db.query(SLAPolicy).filter(
+            SLAPolicy.company_id == user.company_id,
+            SLAPolicy.priority == req.priority
+        ).first()
+
+    now = datetime.utcnow()
     ticket = Ticket(
         customer_id=user.id,
         title=req.title,
         description=req.description,
         priority=req.priority,
-        status="Avoin"
+        ticket_type=req.ticket_type,
+        status="Uusi",
+        sla_policy_id=sla.id if sla else None,
+        first_response_deadline=now + timedelta(minutes=sla.first_response_minutes) if sla else None,
+        resolution_deadline=now + timedelta(minutes=sla.resolution_minutes) if sla else None,
     )
+
     db.add(ticket)
     db.commit()
     print(f"Tiketti luotu, lähetetään sähköposti: {user.email}")
@@ -597,3 +617,35 @@ def update_ticket_type(
     ticket.updated_at = datetime.utcnow()
     db.commit()
     return {"ticket_type": ticket.ticket_type}
+
+@app.get("/sla-policies")
+def get_sla_policies(token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    policies = db.query(SLAPolicy).all()
+    return [{
+        "id": str(p.id),
+        "company_id": str(p.company_id),
+        "name": p.name,
+        "priority": p.priority,
+        "first_response_minutes": p.first_response_minutes,
+        "resolution_minutes": p.resolution_minutes,
+    } for p in policies]
+
+@app.post("/check-sla-breaches")
+def check_sla_breaches(token: str, db: Session = Depends(get_db)):
+    get_current_user(token, db)
+    now = datetime.utcnow()
+    tickets = db.query(Ticket).filter(
+        Ticket.resolution_deadline != None,
+        Ticket.status.notin_(["Ratkaistu", "Suljettu"]),
+        Ticket.sla_breached == False
+    ).all()
+    breached = 0
+    for ticket in tickets:
+        if ticket.resolution_deadline and now > ticket.resolution_deadline:
+            ticket.sla_breached = True
+            breached += 1
+    db.commit()
+    return {"breached": breached}
