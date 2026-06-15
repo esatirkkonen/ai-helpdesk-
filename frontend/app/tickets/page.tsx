@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
 
-type Status = 'Avoin' | 'Työn alla' | 'Odottaa' | 'Valmis' | 'Keskeytetty'
+const allStatuses: Status[] = ['Uusi', 'Luokiteltu', 'Käsittelyssä', 'Odottaa', 'Ratkaistu', 'Suljettu']
+type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
 type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
 
 type Ticket = {
@@ -12,6 +13,7 @@ type Ticket = {
   title: string
   status: Status
   priority: Priority
+  ticket_type: string
   customer: string
   customer_email: string
   customer_phone: string
@@ -24,20 +26,19 @@ type Ticket = {
 }
 
 const statusColors: Record<Status, string> = {
-  'Avoin':       'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  'Työn alla':   'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  'Odottaa':     'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  'Valmis':      'bg-green-500/10 text-green-400 border-green-500/20',
-  'Keskeytetty': 'bg-red-500/10 text-red-400 border-red-500/20',
+  'Uusi':         'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  'Luokiteltu':   'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  'Käsittelyssä': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  'Odottaa':      'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  'Ratkaistu':    'bg-green-500/10 text-green-400 border-green-500/20',
+  'Suljettu':     'bg-gray-500/10 text-gray-300 border-gray-500/20',
 }
-
 const priorityColors: Record<Priority, string> = {
   'Matala':      'text-green-400',
   'Normaali':    'text-blue-400',
   'Kiireellinen':'text-red-400',
 }
 
-const allStatuses: Status[] = ['Avoin', 'Työn alla', 'Odottaa', 'Valmis', 'Keskeytetty']
 
 export default function TicketsPage() {
   const router = useRouter()
@@ -48,6 +49,11 @@ export default function TicketsPage() {
   const [selected, setSelected] = useState<Ticket | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const [filterType, setFilterType] = useState<string>('Kaikki')
+const [filterPriority, setFilterPriority] = useState<string>('Kaikki')
+const [filterDateFrom, setFilterDateFrom] = useState<string>('')
+const [filterDateTo, setFilterDateTo] = useState<string>('')
+const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
   setToken(localStorage.getItem('token'))
@@ -80,14 +86,19 @@ useEffect(() => {
     return new Date(iso).toLocaleDateString('fi-FI')
   }
 
-  const filtered = tickets.filter(t => {
-    const matchSearch =
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      (t.customer || '').toLowerCase().includes(search.toLowerCase()) ||
-      (t.company || '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'Kaikki' || t.status === filterStatus
-    return matchSearch && matchStatus
-  })
+const filtered = tickets.filter(t => {
+  const matchSearch =
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
+    (t.customer || '').toLowerCase().includes(search.toLowerCase()) ||
+    (t.company || '').toLowerCase().includes(search.toLowerCase()) ||
+    t.id.toLowerCase().includes(search.toLowerCase())
+  const matchStatus = filterStatus === 'Kaikki' || t.status === filterStatus
+  const matchType = filterType === 'Kaikki' || t.ticket_type === filterType
+  const matchPriority = filterPriority === 'Kaikki' || t.priority === filterPriority
+  const matchDateFrom = !filterDateFrom || new Date(t.created_at) >= new Date(filterDateFrom)
+  const matchDateTo = !filterDateTo || new Date(t.created_at) <= new Date(filterDateTo + 'T23:59:59')
+  return matchSearch && matchStatus && matchType && matchPriority && matchDateFrom && matchDateTo
+})
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
@@ -141,6 +152,75 @@ useEffect(() => {
               </button>
             ))}
           </div>
+
+          {/* Edistynyt haku */}
+<div className="mb-4">
+  <button
+    onClick={() => setShowAdvanced(!showAdvanced)}
+    className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+  >
+    <svg className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+    {showAdvanced ? 'Piilota edistynyt haku' : 'Edistynyt haku'}
+  </button>
+
+  {showAdvanced && (
+    <div className="mt-3 bg-[#161b22] border border-[#21262d] rounded-xl p-4 space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Tikettityyppi</label>
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors">
+            <option value="Kaikki">Kaikki tyypit</option>
+            <option value="Incident">Incident</option>
+            <option value="Service Request">Service Request</option>
+            <option value="Problem">Problem</option>
+            <option value="Change">Change</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Prioriteetti</label>
+          <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors">
+            <option value="Kaikki">Kaikki prioriteetit</option>
+            <option value="Kiireellinen">Kiireellinen</option>
+            <option value="Normaali">Normaali</option>
+            <option value="Matala">Matala</option>
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Luotu alkaen</label>
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Luotu asti</label>
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-colors" />
+        </div>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-gray-500">{filtered.length} tulosta</span>
+        <button
+          onClick={() => {
+            setFilterType('Kaikki')
+            setFilterPriority('Kaikki')
+            setFilterDateFrom('')
+            setFilterDateTo('')
+            setSearch('')
+            setFilterStatus('Kaikki')
+          }}
+          className="text-xs text-red-400 hover:text-red-300 transition-colors"
+        >
+          Tyhjennä suodattimet
+        </button>
+      </div>
+    </div>
+  )}
+</div>
 
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
             {loading ? (
