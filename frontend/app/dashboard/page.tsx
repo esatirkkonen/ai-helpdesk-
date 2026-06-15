@@ -113,6 +113,14 @@ export default function DashboardPage() {
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
   const [ticketType, setTicketType] = useState('Incident')
   const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
+  const [showNewTicketModal, setShowNewTicketModal] = useState(false)
+  const [customers, setCustomers] = useState<{id: string, name: string, email: string, company: string}[]>([])
+  const [newTicketTitle, setNewTicketTitle] = useState('')
+  const [newTicketDesc, setNewTicketDesc] = useState('')
+  const [newTicketPriority, setNewTicketPriority] = useState('Normaali')
+  const [newTicketType, setNewTicketType] = useState('Incident')
+  const [newTicketCustomer, setNewTicketCustomer] = useState('')
+  const [creatingTicket, setCreatingTicket] = useState(false)
 
   useEffect(() => {
     setToken(localStorage.getItem('token'))
@@ -120,12 +128,13 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (token === null) return
-    if (!token) { router.push('/login'); return }
-    fetchTickets()
-    fetchAgents()
-    return () => { Object.values(intervalRef.current).forEach(clearInterval) }
-  }, [token])
+  if (token === null) return
+  if (!token) { router.push('/login'); return }
+  fetchTickets()
+  fetchAgents()
+  fetchCustomers()
+  return () => { Object.values(intervalRef.current).forEach(clearInterval) }
+}, [token])
 
   async function fetchTickets() {
     setLoading(true)
@@ -160,6 +169,12 @@ export default function DashboardPage() {
     const data = await res.json()
     setAgents(data)
   }
+
+  async function fetchCustomers() {
+  const res = await fetch(`http://localhost:8000/customers?token=${token}`)
+  const data = await res.json()
+  setCustomers(data)
+}
 
   async function fetchComments(ticketId: string) {
     const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
@@ -254,6 +269,36 @@ export default function DashboardPage() {
     await fetchComments(selected.id)
   }
 
+
+  async function createTicketAsAgent(e: React.FormEvent) {
+  e.preventDefault()
+  if (!newTicketCustomer) return
+  setCreatingTicket(true)
+  try {
+    const res = await fetch(`http://localhost:8000/tickets/agent-create?token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newTicketTitle,
+        description: newTicketDesc,
+        priority: newTicketPriority,
+        ticket_type: newTicketType,
+        customer_id: newTicketCustomer,
+      }),
+    })
+    if (res.ok) {
+      setShowNewTicketModal(false)
+      setNewTicketTitle('')
+      setNewTicketDesc('')
+      setNewTicketPriority('Normaali')
+      setNewTicketType('Incident')
+      setNewTicketCustomer('')
+      await fetchTickets()
+    }
+  } finally {
+    setCreatingTicket(false)
+  }
+}
   function startTimer(id: string) {
     if (intervalRef.current[id]) return
     setRunning(r => ({ ...r, [id]: true }))
@@ -300,6 +345,16 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <button
+  onClick={() => setShowNewTicketModal(true)}
+  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-medium transition-colors mb-3"
+>
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+  Uusi tiketti
+</button>
+
               <button
                 onClick={() => setFilter('all')}
                 className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
@@ -665,7 +720,78 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
+    {/* Uusi tiketti -modaali */}
+{showNewTicketModal && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
+        <h2 className="font-medium">Luo tiketti asiakkaalle</h2>
+        <button onClick={() => setShowNewTicketModal(false)} className="text-gray-500 hover:text-gray-300">✕</button>
+      </div>
+      <form onSubmit={createTicketAsAgent} className="p-6 space-y-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Asiakas</label>
+          <select value={newTicketCustomer} onChange={e => setNewTicketCustomer(e.target.value)} required
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+            <option value="">— Valitse asiakas —</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>{c.name} — {c.company}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Otsikko</label>
+          <input value={newTicketTitle} onChange={e => setNewTicketTitle(e.target.value)} required
+            placeholder="Lyhyt kuvaus ongelmasta"
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Kuvaus</label>
+          <textarea value={newTicketDesc} onChange={e => setNewTicketDesc(e.target.value)} required
+            rows={3} placeholder="Tarkempi kuvaus..."
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors resize-none" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Tikettityyppi</label>
+          <select value={newTicketType} onChange={e => setNewTicketType(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+            <option value="Incident">Incident — häiriö</option>
+            <option value="Service Request">Service Request — pyyntö</option>
+            <option value="Problem">Problem — toistuva häiriö</option>
+            <option value="Change">Change — muutos</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Prioriteetti</label>
+          <div className="flex gap-2">
+            {(['Matala', 'Normaali', 'Kiireellinen'] as const).map(p => (
+              <button key={p} type="button" onClick={() => setNewTicketPriority(p)}
+                className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${
+                  newTicketPriority === p
+                    ? p === 'Kiireellinen' ? 'bg-red-500/10 border-red-500/40 text-red-400'
+                    : p === 'Normaali' ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+                    : 'bg-green-500/10 border-green-500/40 text-green-400'
+                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+                }`}>
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={() => setShowNewTicketModal(false)}
+            className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
+            Peruuta
+          </button>
+          <button type="submit" disabled={creatingTicket || !newTicketCustomer}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
+            {creatingTicket ? 'Luodaan...' : 'Luo tiketti'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
     </div>
   )
 }

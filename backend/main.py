@@ -120,6 +120,13 @@ class CompanyCreate(BaseModel):
     contact_email: Optional[str] = None
     phone: Optional[str] = None
 
+class AgentTicketCreate(BaseModel):
+    title: str
+    description: str
+    priority: str = "Normaali"
+    ticket_type: str = "Incident"
+    customer_id: str
+
 # ── Auth apufunktiot ──────────────────────────────────────────
 
 def verify_password(plain, hashed):
@@ -169,6 +176,73 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "email": user.email,
         "id": str(user.id)
     }
+
+@app.post("/tickets/agent-create")
+async def agent_create_ticket(req: AgentTicketCreate, token: str, db: Session = Depends(get_db)):
+    agent = get_current_user(token, db)
+    if agent.role not in ["agent", "admin"]:
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    
+    customer = db.query(User).filter(User.id == uuid.UUID(req.customer_id)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Asiakasta ei löydy")
+
+    # Hae SLA-politiikka
+    sla = None
+    if customer.company_id:
+        sla = db.query(SLAPolicy).filter(
+            SLAPolicy.company_id == customer.company_id,
+            SLAPolicy.priority == req.priority
+        ).first()
+
+    now = datetime.utcnow()
+    ticket = Ticket(
+        customer_id=uuid.UUID(req.customer_id),
+        agent_id=agent.id,
+        title=req.title,
+        description=req.description,
+        priority=req.priority,
+        ticket_type=req.ticket_type,
+        status="Luokiteltu",
+        sla_policy_id=sla.id if sla else None,
+        first_response_deadline=now + timedelta(minutes=sla.first_response_minutes) if sla else None,
+        resolution_deadline=now + timedelta(minutes=sla.resolution_minutes) if sla else None,
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+
+    await send_email(
+        to=customer.email,
+        subject=f"IT-tuki on luonut tiketin puolestasi — {ticket.title}",
+        body=f"""
+        <h2>IT-tuki on luonut tukipyynnön puolestasi</h2>
+        <p>Hei {customer.name},</p>
+        <p>IT-tuki on kirjannut seuraavan tukipyynnön puolestasi:</p>
+        <br>
+        <b>Otsikko:</b> {ticket.title}<br>
+        <b>Kuvaus:</b> {ticket.description}<br>
+        <b>Prioriteetti:</b> {ticket.priority}<br>
+        <br>
+        <p>Ystävällisin terveisin,<br>CloudwebAI Helpdesk</p>
+        """
+    )
+
+    return {"id": str(ticket.id), "title": ticket.title, "status": ticket.status}
+
+@app.get("/customers")
+def get_customers(token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    if user.role not in ["agent", "admin"]:
+        raise HTTPException(status_code=403, detail="Ei oikeuksia")
+    customers = db.query(User).filter(User.role == "customer", User.active == True).all()
+    return [{
+        "id": str(c.id),
+        "name": c.name,
+        "email": c.email,
+        "company": c.company.name if c.company else None,
+        "company_id": str(c.company_id) if c.company_id else None,
+    } for c in customers]
 
 # ── Tiketit ───────────────────────────────────────────────────
 
