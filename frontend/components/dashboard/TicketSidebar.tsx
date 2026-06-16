@@ -1,20 +1,5 @@
 'use client'
-
-import StatusBadge from '@/components/shared/StatusBadge'
-import TypeBadge from '@/components/shared/TypeBadge'
-
-type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
-
-type Ticket = {
-  id: string
-  ticket_number: number
-  title: string
-  status: Status
-  ticket_type: string
-  customer: string
-  time_spent_seconds: number
-  agent: string | null
-} 
+import type { Ticket, Status } from '@/types'
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
