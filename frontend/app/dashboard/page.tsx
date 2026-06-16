@@ -3,6 +3,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
+import TicketSidebar from '@/components/dashboard/TicketSidebar'
+import CustomerInfo from '@/components/dashboard/CustomerInfo'
+import SLAPanel from '@/components/dashboard/SLAPanel'
+import CommentHistory from '@/components/dashboard/CommentHistory'
+import InternalNote from '@/components/dashboard/InternalNote'
+import ReplyBox from '@/components/dashboard/ReplyBox'
+import StatusBadge from '@/components/shared/StatusBadge'
+import PriorityBadge from '@/components/shared/PriorityBadge'
+import TypeBadge from '@/components/shared/TypeBadge'
 
 type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
 type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
@@ -21,11 +30,11 @@ type Ticket = {
   agent: string | null
   agent_id: string | null
   time_spent_seconds: number
-  created_at: string
-  updated_at: string
   first_response_deadline: string | null
   resolution_deadline: string | null
   sla_breached: boolean
+  created_at: string
+  updated_at: string
 }
 
 type Agent = {
@@ -52,42 +61,11 @@ const statusColors: Record<Status, string> = {
   'Suljettu':     'bg-gray-500/10 text-gray-300 border-gray-500/20',
 }
 
-const priorityColors: Record<Priority, string> = {
-  'Matala':       'text-green-400',
-  'Normaali':     'text-blue-400',
-  'Kiireellinen': 'text-red-400',
-}
-
-const typeColors: Record<string, string> = {
-  'Incident':       'bg-red-500/10 text-red-400 border-red-500/20',
-  'Service Request':'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  'Problem':        'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  'Change':         'bg-purple-500/10 text-purple-400 border-purple-500/20',
-}
-
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
   return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
-}
-
-function getSLAStatus(deadline: string | null): { percent: number; color: string; label: string } {
-  if (!deadline) return { percent: 0, color: '', label: '' }
-  
-  const now = new Date()
-  const end = new Date(deadline)
-  const diff = end.getTime() - now.getTime()
-  
-  if (diff <= 0) return { percent: 100, color: 'bg-red-500', label: 'SLA rikottu!' }
-  
-  // Lasketaan kuinka paljon ajasta on kulunut
-  const total = end.getTime() - (end.getTime() - diff)
-  const percent = Math.min(100, Math.max(0, ((1 - diff / (24 * 60 * 60 * 1000)) * 100)))
-  
-  if (percent >= 90) return { percent, color: 'bg-red-500', label: `${Math.floor(diff / 60000)} min jäljellä` }
-  if (percent >= 75) return { percent, color: 'bg-amber-500', label: `${Math.floor(diff / 3600000)}h jäljellä` }
-  return { percent, color: 'bg-green-500', label: `${Math.floor(diff / 3600000)}h jäljellä` }
 }
 
 function formatDate(iso: string) {
@@ -112,7 +90,6 @@ export default function DashboardPage() {
   const [showTypeModal, setShowTypeModal] = useState(false)
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
   const [ticketType, setTicketType] = useState('Incident')
-  const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
   const [showNewTicketModal, setShowNewTicketModal] = useState(false)
   const [customers, setCustomers] = useState<{id: string, name: string, email: string, company: string}[]>([])
   const [newTicketTitle, setNewTicketTitle] = useState('')
@@ -121,6 +98,7 @@ export default function DashboardPage() {
   const [newTicketType, setNewTicketType] = useState('Incident')
   const [newTicketCustomer, setNewTicketCustomer] = useState('')
   const [creatingTicket, setCreatingTicket] = useState(false)
+  const intervalRef = useRef<Record<string, NodeJS.Timeout>>({})
 
   useEffect(() => {
     setToken(localStorage.getItem('token'))
@@ -128,13 +106,13 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-  if (token === null) return
-  if (!token) { router.push('/login'); return }
-  fetchTickets()
-  fetchAgents()
-  fetchCustomers()
-  return () => { Object.values(intervalRef.current).forEach(clearInterval) }
-}, [token])
+    if (token === null) return
+    if (!token) { router.push('/login'); return }
+    fetchTickets()
+    fetchAgents()
+    fetchCustomers()
+    return () => { Object.values(intervalRef.current).forEach(clearInterval) }
+  }, [token])
 
   async function fetchTickets() {
     setLoading(true)
@@ -171,10 +149,10 @@ export default function DashboardPage() {
   }
 
   async function fetchCustomers() {
-  const res = await fetch(`http://localhost:8000/customers?token=${token}`)
-  const data = await res.json()
-  setCustomers(data)
-}
+    const res = await fetch(`http://localhost:8000/customers?token=${token}`)
+    const data = await res.json()
+    setCustomers(data)
+  }
 
   async function fetchComments(ticketId: string) {
     const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
@@ -269,36 +247,36 @@ export default function DashboardPage() {
     await fetchComments(selected.id)
   }
 
-
   async function createTicketAsAgent(e: React.FormEvent) {
-  e.preventDefault()
-  if (!newTicketCustomer) return
-  setCreatingTicket(true)
-  try {
-    const res = await fetch(`http://localhost:8000/tickets/agent-create?token=${token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: newTicketTitle,
-        description: newTicketDesc,
-        priority: newTicketPriority,
-        ticket_type: newTicketType,
-        customer_id: newTicketCustomer,
-      }),
-    })
-    if (res.ok) {
-      setShowNewTicketModal(false)
-      setNewTicketTitle('')
-      setNewTicketDesc('')
-      setNewTicketPriority('Normaali')
-      setNewTicketType('Incident')
-      setNewTicketCustomer('')
-      await fetchTickets()
+    e.preventDefault()
+    if (!newTicketCustomer) return
+    setCreatingTicket(true)
+    try {
+      const res = await fetch(`http://localhost:8000/tickets/agent-create?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTicketTitle,
+          description: newTicketDesc,
+          priority: newTicketPriority,
+          ticket_type: newTicketType,
+          customer_id: newTicketCustomer,
+        }),
+      })
+      if (res.ok) {
+        setShowNewTicketModal(false)
+        setNewTicketTitle('')
+        setNewTicketDesc('')
+        setNewTicketPriority('Normaali')
+        setNewTicketType('Incident')
+        setNewTicketCustomer('')
+        await fetchTickets()
+      }
+    } finally {
+      setCreatingTicket(false)
     }
-  } finally {
-    setCreatingTicket(false)
   }
-}
+
   function startTimer(id: string) {
     if (intervalRef.current[id]) return
     setRunning(r => ({ ...r, [id]: true }))
@@ -331,98 +309,21 @@ export default function DashboardPage() {
       <Topbar activePage="dashboard" />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-72 border-r border-[#21262d] bg-[#161b22] flex flex-col flex-shrink-0">
-          <div className="p-4 border-b border-[#21262d]">
-            <div className="flex gap-3 text-xs mb-3">
-              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg flex-1 text-center">
-                <div className="font-medium text-lg">{openTickets.length}</div>
-                <div>Uudet</div>
-              </div>
-              <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-2 rounded-lg flex-1 text-center">
-                <div className="font-medium text-lg">{myTickets.length}</div>
-                <div>Minulla</div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-  onClick={() => setShowNewTicketModal(true)}
-  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-medium transition-colors mb-3"
->
-  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-  </svg>
-  Uusi tiketti
-</button>
+        <TicketSidebar
+          tickets={tickets}
+          selected={selected}
+          loading={loading}
+          filter={filter}
+          name={name}
+          timers={timers}
+          running={running}
+          onSelect={selectTicket}
+          onFilterChange={setFilter}
+          onNewTicket={() => setShowNewTicketModal(true)}
+          openCount={openTickets.length}
+          myCount={myTickets.length}
+        />
 
-              <button
-                onClick={() => setFilter('all')}
-                className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
-                  filter === 'all'
-                    ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
-                }`}
-              >
-                Kaikki
-              </button>
-              <button
-                onClick={() => setFilter('mine')}
-                className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${
-                  filter === 'mine'
-                    ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
-                }`}
-              >
-                Omat
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="text-center text-gray-500 py-8 text-sm">Ladataan...</div>
-            ) : tickets.filter(t => filter === 'all' || t.agent === name).length === 0 ? (
-              <div className="text-center text-gray-500 py-8 text-sm">Ei tikettejä</div>
-            ) : (
-              tickets
-                .filter(t => filter === 'all' || t.agent === name)
-                .map(ticket => (
-                  <div
-                    key={ticket.id}
-                    onClick={() => selectTicket(ticket)}
-                    className={`p-4 border-b border-[#21262d] cursor-pointer transition-colors ${
-                      selected?.id === ticket.id
-                        ? 'bg-blue-500/5 border-l-2 border-l-blue-500 pl-3.5'
-                        : 'hover:bg-[#1c2128]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[ticket.status]}`}>
-                        {ticket.status}
-                      </span>
-                      {running[ticket.id] && (
-                        <span className="text-xs text-blue-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
-                          {formatTime((timers[ticket.id] || 0) + ticket.time_spent_seconds)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium truncate mt-1">{ticket.title}</p>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className="text-xs text-gray-500">{ticket.customer}</p>
-                      {ticket.ticket_type && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded border ${typeColors[ticket.ticket_type] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
-                          {ticket.ticket_type}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-            )}
-          </div>
-        </div>
-
-        {/* Main */}
         {selected ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-3xl mx-auto space-y-4">
@@ -431,17 +332,9 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-xs px-2.5 py-0.5 rounded-full border ${statusColors[selected.status]}`}>
-                      {selected.status}
-                    </span>
-                    <span className={`text-xs font-medium ${priorityColors[selected.priority]}`}>
-                      {selected.priority}
-                    </span>
-                    {selected.ticket_type && (
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full border ${typeColors[selected.ticket_type] || ''}`}>
-                        {selected.ticket_type}
-                      </span>
-                    )}
+                    <StatusBadge status={selected.status} />
+                    <PriorityBadge priority={selected.priority} />
+                    {selected.ticket_type && <TypeBadge type={selected.ticket_type} />}
                   </div>
                   <h1 className="text-lg font-medium">{selected.title}</h1>
                   <p className="text-xs text-gray-500 mt-1">Luotu {formatDate(selected.created_at)}</p>
@@ -493,82 +386,18 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Asiakkaan tiedot */}
-              <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                <p className="text-xs text-gray-500 mb-3">Asiakkaan tiedot</p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-0.5">Nimi</p>
-                    <p className="text-gray-200">{selected.customer}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-0.5">Yritys</p>
-                    <p className="text-gray-200">{selected.company}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-0.5">Sähköposti</p>
-                    <p className="text-blue-400">{selected.customer_email}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-0.5">Puhelin</p>
-                    <p className="text-gray-200">{selected.customer_phone || '—'}</p>
-                  </div>
-                </div>
-              </div>
+              <CustomerInfo
+                customer={selected.customer}
+                company={selected.company}
+                email={selected.customer_email}
+                phone={selected.customer_phone}
+              />
 
-              {/* SLA */}
-{(selected.resolution_deadline || selected.first_response_deadline) && (
-  <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-    <p className="text-xs text-gray-500 mb-3">SLA-seuranta</p>
-    <div className="space-y-3">
-      {selected.first_response_deadline && (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-gray-400">Ensivastaus</span>
-            <span className={`text-xs font-medium ${
-              getSLAStatus(selected.first_response_deadline).color === 'bg-red-500' ? 'text-red-400' :
-              getSLAStatus(selected.first_response_deadline).color === 'bg-amber-500' ? 'text-amber-400' :
-              'text-green-400'
-            }`}>
-              {getSLAStatus(selected.first_response_deadline).label}
-            </span>
-          </div>
-          <div className="w-full bg-[#21262d] rounded-full h-1.5">
-            <div
-              className={`h-1.5 rounded-full transition-all ${getSLAStatus(selected.first_response_deadline).color}`}
-              style={{ width: `${getSLAStatus(selected.first_response_deadline).percent}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {selected.resolution_deadline && (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-gray-400">Ratkaisu</span>
-            <span className={`text-xs font-medium ${
-              getSLAStatus(selected.resolution_deadline).color === 'bg-red-500' ? 'text-red-400' :
-              getSLAStatus(selected.resolution_deadline).color === 'bg-amber-500' ? 'text-amber-400' :
-              'text-green-400'
-            }`}>
-              {getSLAStatus(selected.resolution_deadline).label}
-            </span>
-          </div>
-          <div className="w-full bg-[#21262d] rounded-full h-1.5">
-            <div
-              className={`h-1.5 rounded-full transition-all ${getSLAStatus(selected.resolution_deadline).color}`}
-              style={{ width: `${getSLAStatus(selected.resolution_deadline).percent}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {selected.sla_breached && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400 text-xs font-medium">
-          ⚠️ SLA rikottu!
-        </div>
-      )}
-    </div>
-  </div>
-)}
+              <SLAPanel
+                firstResponseDeadline={selected.first_response_deadline}
+                resolutionDeadline={selected.resolution_deadline}
+                slaBreached={selected.sla_breached}
+              />
 
               {/* Ongelma */}
               <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
@@ -576,94 +405,20 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-300 leading-relaxed">{selected.description}</p>
               </div>
 
-              {/* Kommenttihistoria */}
-              {comments.length > 0 && (
-                <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[#21262d]">
-                    <p className="text-xs text-gray-500">Kommenttihistoria ({comments.length})</p>
-                  </div>
-                  <div className="divide-y divide-[#21262d]">
-                    {comments.map(comment => (
-                      <div key={comment.id} className={`px-4 py-3 ${comment.is_internal ? 'bg-amber-500/5' : ''}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-300">{comment.user_name || 'Käyttäjä'}</span>
-                            {comment.is_internal && (
-                              <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                                Sisäinen muistiinpano
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs text-gray-600">
-                            {new Date(comment.created_at).toLocaleString('fi-FI')}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-300 leading-relaxed">{comment.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <CommentHistory comments={comments} />
 
-              {/* Sisäinen muistiinpano */}
-              <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/5 border-b border-[#21262d]">
-                  <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                  </svg>
-                  <span className="text-sm font-medium text-amber-400">Sisäinen muistiinpano</span>
-                  <span className="text-xs text-gray-500 ml-auto">Asiakas ei näe tätä</span>
-                </div>
-                <div className="p-4">
-                  <textarea
-                    value={internalNote}
-                    onChange={e => setInternalNote(e.target.value)}
-                    rows={3}
-                    placeholder="Kirjoita sisäinen muistiinpano..."
-                    className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors resize-none"
-                  />
-                </div>
-                <div className="px-4 pb-4">
-                  <button
-                    onClick={addInternalNote}
-                    disabled={!internalNote.trim()}
-                    className="flex items-center gap-1.5 border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg px-4 py-2 text-sm transition-colors"
-                  >
-                    Tallenna muistiinpano
-                  </button>
-                </div>
-              </div>
+              <InternalNote
+                value={internalNote}
+                onChange={setInternalNote}
+                onSave={addInternalNote}
+              />
 
-              {/* Vastaus asiakkaalle */}
-              <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 bg-blue-500/5 border-b border-[#21262d]">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                  </svg>
-                  <span className="text-sm font-medium text-blue-400">Vastaus asiakkaalle</span>
-                </div>
-                <div className="p-4">
-                  <textarea
-                    value={reply}
-                    onChange={e => setReply(e.target.value)}
-                    rows={5}
-                    placeholder="Kirjoita vastaus asiakkaalle..."
-                    className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                  />
-                </div>
-                <div className="flex gap-2 px-4 pb-4">
-                  <button
-                    onClick={sendReply}
-                    disabled={sending || !reply.trim()}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                    </svg>
-                    {sending ? 'Lähetetään...' : 'Lähetä vastaus asiakkaalle'}
-                  </button>
-                </div>
-              </div>
+              <ReplyBox
+                value={reply}
+                onChange={setReply}
+                onSend={sendReply}
+                sending={sending}
+              />
 
             </div>
           </div>
@@ -693,9 +448,7 @@ export default function DashboardPage() {
                   key={type}
                   onClick={() => setTicketType(type)}
                   className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
-                    ticketType === type
-                      ? color
-                      : 'border-[#30363d] text-gray-400 hover:border-[#484f58]'
+                    ticketType === type ? color : 'border-[#30363d] text-gray-400 hover:border-[#484f58]'
                   }`}
                 >
                   <div className="font-medium text-sm">{type}</div>
@@ -704,94 +457,92 @@ export default function DashboardPage() {
               ))}
             </div>
             <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => { setShowTypeModal(false); setPendingStatus(null) }}
-                className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors"
-              >
+              <button onClick={() => { setShowTypeModal(false); setPendingStatus(null) }}
+                className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
                 Peruuta
               </button>
-              <button
-                onClick={confirmClassification}
-                className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
-              >
+              <button onClick={confirmClassification}
+                className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
                 Luokittele tiketti
               </button>
             </div>
           </div>
         </div>
       )}
-    {/* Uusi tiketti -modaali */}
-{showNewTicketModal && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
-    <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
-        <h2 className="font-medium">Luo tiketti asiakkaalle</h2>
-        <button onClick={() => setShowNewTicketModal(false)} className="text-gray-500 hover:text-gray-300">✕</button>
-      </div>
-      <form onSubmit={createTicketAsAgent} className="p-6 space-y-4">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Asiakas</label>
-          <select value={newTicketCustomer} onChange={e => setNewTicketCustomer(e.target.value)} required
-            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
-            <option value="">— Valitse asiakas —</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name} — {c.company}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Otsikko</label>
-          <input value={newTicketTitle} onChange={e => setNewTicketTitle(e.target.value)} required
-            placeholder="Lyhyt kuvaus ongelmasta"
-            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Kuvaus</label>
-          <textarea value={newTicketDesc} onChange={e => setNewTicketDesc(e.target.value)} required
-            rows={3} placeholder="Tarkempi kuvaus..."
-            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors resize-none" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Tikettityyppi</label>
-          <select value={newTicketType} onChange={e => setNewTicketType(e.target.value)}
-            className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
-            <option value="Incident">Incident — häiriö</option>
-            <option value="Service Request">Service Request — pyyntö</option>
-            <option value="Problem">Problem — toistuva häiriö</option>
-            <option value="Change">Change — muutos</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Prioriteetti</label>
-          <div className="flex gap-2">
-            {(['Matala', 'Normaali', 'Kiireellinen'] as const).map(p => (
-              <button key={p} type="button" onClick={() => setNewTicketPriority(p)}
-                className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${
-                  newTicketPriority === p
-                    ? p === 'Kiireellinen' ? 'bg-red-500/10 border-red-500/40 text-red-400'
-                    : p === 'Normaali' ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-                    : 'bg-green-500/10 border-green-500/40 text-green-400'
-                    : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
-                }`}>
-                {p}
-              </button>
-            ))}
+
+      {/* Uusi tiketti -modaali */}
+      {showNewTicketModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#21262d]">
+              <h2 className="font-medium">Luo tiketti asiakkaalle</h2>
+              <button onClick={() => setShowNewTicketModal(false)} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
+            <form onSubmit={createTicketAsAgent} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Asiakas</label>
+                <select value={newTicketCustomer} onChange={e => setNewTicketCustomer(e.target.value)} required
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                  <option value="">— Valitse asiakas —</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} — {c.company}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Otsikko</label>
+                <input value={newTicketTitle} onChange={e => setNewTicketTitle(e.target.value)} required
+                  placeholder="Lyhyt kuvaus ongelmasta"
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Kuvaus</label>
+                <textarea value={newTicketDesc} onChange={e => setNewTicketDesc(e.target.value)} required
+                  rows={3} placeholder="Tarkempi kuvaus..."
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors resize-none" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Tikettityyppi</label>
+                <select value={newTicketType} onChange={e => setNewTicketType(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                  <option value="Incident">Incident — häiriö</option>
+                  <option value="Service Request">Service Request — pyyntö</option>
+                  <option value="Problem">Problem — toistuva häiriö</option>
+                  <option value="Change">Change — muutos</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Prioriteetti</label>
+                <div className="flex gap-2">
+                  {(['Matala', 'Normaali', 'Kiireellinen'] as const).map(p => (
+                    <button key={p} type="button" onClick={() => setNewTicketPriority(p)}
+                      className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${
+                        newTicketPriority === p
+                          ? p === 'Kiireellinen' ? 'bg-red-500/10 border-red-500/40 text-red-400'
+                          : p === 'Normaali' ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+                          : 'bg-green-500/10 border-green-500/40 text-green-400'
+                          : 'border-[#30363d] text-gray-500 hover:border-[#484f58]'
+                      }`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowNewTicketModal(false)}
+                  className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
+                  Peruuta
+                </button>
+                <button type="submit" disabled={creatingTicket || !newTicketCustomer}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
+                  {creatingTicket ? 'Luodaan...' : 'Luo tiketti'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={() => setShowNewTicketModal(false)}
-            className="flex-1 border border-[#30363d] text-gray-400 hover:text-white rounded-lg py-2.5 text-sm transition-colors">
-            Peruuta
-          </button>
-          <button type="submit" disabled={creatingTicket || !newTicketCustomer}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors">
-            {creatingTicket ? 'Luodaan...' : 'Luo tiketti'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
+
     </div>
   )
 }
