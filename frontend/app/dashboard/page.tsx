@@ -18,6 +18,7 @@ type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
 
 type Ticket = {
   id: string
+  ticket_number: number
   title: string
   description: string
   status: Status
@@ -120,12 +121,13 @@ export default function DashboardPage() {
       const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
-      setTickets(data)
-      if (data.length > 0) {
+      const ticketList = Array.isArray(data) ? data : []
+      setTickets(ticketList)
+      if (ticketList.length > 0) {
         const params = new URLSearchParams(window.location.search)
         const ticketId = params.get('ticket')
         if (ticketId) {
-          const found = data.find((t: Ticket) => t.id === ticketId)
+          const found = ticketList.find((t: Ticket) => t.id === ticketId)
           if (found) {
             setSelected(found)
             setTimeout(() => fetchComments(found.id), 0)
@@ -133,8 +135,8 @@ export default function DashboardPage() {
           }
         }
         if (!selected) {
-          setSelected(data[0])
-          setTimeout(() => fetchComments(data[0].id), 0)
+          setSelected(ticketList[0])
+          setTimeout(() => fetchComments(ticketList[0].id), 0)
         }
       }
     } finally {
@@ -143,21 +145,27 @@ export default function DashboardPage() {
   }
 
   async function fetchAgents() {
-    const res = await fetch(`http://localhost:8000/agents?token=${token}`)
-    const data = await res.json()
-    setAgents(data)
+    try {
+      const res = await fetch(`http://localhost:8000/agents?token=${token}`)
+      const data = await res.json()
+      setAgents(Array.isArray(data) ? data : [])
+    } catch { setAgents([]) }
   }
 
   async function fetchCustomers() {
-    const res = await fetch(`http://localhost:8000/customers?token=${token}`)
-    const data = await res.json()
-    setCustomers(data)
+    try {
+      const res = await fetch(`http://localhost:8000/customers?token=${token}`)
+      const data = await res.json()
+      setCustomers(Array.isArray(data) ? data : [])
+    } catch { setCustomers([]) }
   }
 
   async function fetchComments(ticketId: string) {
-    const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
-    const data = await res.json()
-    setComments(data)
+    try {
+      const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
+      const data = await res.json()
+      setComments(Array.isArray(data) ? data : [])
+    } catch { setComments([]) }
   }
 
   async function updateStatus(status: Status) {
@@ -252,7 +260,7 @@ export default function DashboardPage() {
     if (!newTicketCustomer) return
     setCreatingTicket(true)
     try {
-      const res = await fetch(`http://localhost:8000/tickets/agent-create?token=${token}`, {
+      const res = await fetch(`http://localhost:8000/agent-ticket?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -301,8 +309,8 @@ export default function DashboardPage() {
 
   const currentTime = selected ? (timers[selected.id] || 0) + selected.time_spent_seconds : 0
   const isRunning = selected ? (running[selected.id] || false) : false
-  const myTickets = tickets.filter(t => t.agent === name)
-  const openTickets = tickets.filter(t => t.status === 'Uusi' || t.status === 'Luokiteltu')
+  const myTickets = Array.isArray(tickets) ? tickets.filter(t => t.agent === name) : []
+  const openTickets = Array.isArray(tickets) ? tickets.filter(t => t.status === 'Uusi' || t.status === 'Luokiteltu') : []
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
@@ -336,7 +344,12 @@ export default function DashboardPage() {
                     <PriorityBadge priority={selected.priority} />
                     {selected.ticket_type && <TypeBadge type={selected.ticket_type} />}
                   </div>
-                  <h1 className="text-lg font-medium">{selected.title}</h1>
+                  <h1 className="text-lg font-medium">
+                    <span className="text-gray-500 font-mono text-sm mr-2">
+                      #{String(selected.ticket_number || 0).padStart(4, '0')}
+                    </span>
+                    {selected.title}
+                  </h1>
                   <p className="text-xs text-gray-500 mt-1">Luotu {formatDate(selected.created_at)}</p>
                 </div>
                 <div className="bg-[#161b22] border border-[#21262d] rounded-xl px-4 py-3 text-center min-w-[140px]">

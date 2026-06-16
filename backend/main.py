@@ -177,7 +177,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "id": str(user.id)
     }
 
-@app.post("/tickets/agent-create")
+@app.post("/agent-ticket")
 async def agent_create_ticket(req: AgentTicketCreate, token: str, db: Session = Depends(get_db)):
     agent = get_current_user(token, db)
     if agent.role not in ["agent", "admin"]:
@@ -276,6 +276,7 @@ def get_tickets(
         "company": t.customer.company.name if t.customer and t.customer.company else None,
         "agent": t.agent.name if t.agent else None,
         "agent_id": str(t.agent_id) if t.agent_id else None,
+        "ticket_number": t.ticket_number,
         "ticket_type": t.ticket_type,
         "first_response_deadline": t.first_response_deadline.isoformat() if t.first_response_deadline else None,
         "resolution_deadline": t.resolution_deadline.isoformat() if t.resolution_deadline else None,

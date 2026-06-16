@@ -7,6 +7,7 @@ type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu'
 
 type Ticket = {
   id: string
+  ticket_number: number
   title: string
   status: Status
   ticket_type: string
@@ -117,7 +118,10 @@ export default function TicketSidebar({
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-medium truncate mt-1">{ticket.title}</p>
+                <p className="text-sm font-medium truncate mt-1">
+  <span className="text-gray-600 font-mono text-xs mr-1">#{String(ticket.ticket_number).padStart(4, '0')}</span>
+  {ticket.title}
+</p>
                 <div className="flex items-center justify-between mt-0.5">
                   <p className="text-xs text-gray-500">{ticket.customer}</p>
                   {ticket.ticket_type && <TypeBadge type={ticket.ticket_type} />}

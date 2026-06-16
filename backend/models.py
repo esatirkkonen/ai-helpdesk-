@@ -47,7 +47,8 @@ class Ticket(Base):
     agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     title = Column(String(255), nullable=False)
     description = Column(Text)
-    status = Column(String(20), default="Avoin")
+    status = Column(String(20), default="Uusi")
+    ticket_number = Column(Integer, autoincrement=True)
     priority = Column(String(20), default="Normaali")
     ticket_type = Column(String(50), default="Incident")
     time_spent_seconds = Column(Integer, default=0)
@@ -65,6 +66,7 @@ class Ticket(Base):
     comments = relationship("Comment", back_populates="ticket")
     time_logs = relationship("TimeLog", back_populates="ticket")
     ai_suggestions = relationship("AISuggestion", back_populates="ticket")
+   
     
 
 class TimeLog(Base):
