@@ -1,5 +1,7 @@
 'use client'
 import type { Ticket, Status } from '@/types'
+import StatusBadge from '@/components/shared/StatusBadge'
+import TypeBadge from '@/components/shared/TypeBadge'
 
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
