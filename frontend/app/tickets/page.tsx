@@ -68,7 +68,7 @@ useEffect(() => {
   async function fetchTickets() {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       setTickets(data)

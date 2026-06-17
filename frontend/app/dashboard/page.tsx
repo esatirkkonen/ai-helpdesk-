@@ -118,7 +118,7 @@ export default function DashboardPage() {
   async function fetchTickets() {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/tickets?token=${token}`)
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       const ticketList = Array.isArray(data) ? data : []
@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
   async function fetchAgents() {
     try {
-      const res = await fetch(`http://localhost:8000/agents?token=${token}`)
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/agents?token=${token}`)
       const data = await res.json()
       setAgents(Array.isArray(data) ? data : [])
     } catch { setAgents([]) }
@@ -154,7 +154,7 @@ export default function DashboardPage() {
 
   async function fetchCustomers() {
     try {
-      const res = await fetch(`http://localhost:8000/customers?token=${token}`)
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/customers?token=${token}`)
       const data = await res.json()
       setCustomers(Array.isArray(data) ? data : [])
     } catch { setCustomers([]) }
@@ -162,7 +162,7 @@ export default function DashboardPage() {
 
   async function fetchComments(ticketId: string) {
     try {
-      const res = await fetch(`http://localhost:8000/tickets/${ticketId}/comments?token=${token}`)
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${ticketId}/comments?token=${token}`)
       const data = await res.json()
       setComments(Array.isArray(data) ? data : [])
     } catch { setComments([]) }
@@ -175,7 +175,7 @@ export default function DashboardPage() {
       setShowTypeModal(true)
       return
     }
-    const res = await fetch(`http://localhost:8000/tickets/${selected.id}/status?token=${token}`, {
+    const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/status?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -191,12 +191,12 @@ export default function DashboardPage() {
 
   async function confirmClassification() {
     if (!selected || !pendingStatus) return
-    await fetch(`http://localhost:8000/tickets/${selected.id}/type?token=${token}`, {
+    await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/type?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ticket_type: ticketType }),
     })
-    const res = await fetch(`http://localhost:8000/tickets/${selected.id}/status?token=${token}`, {
+    const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/status?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: pendingStatus }),
@@ -212,7 +212,7 @@ export default function DashboardPage() {
 
   async function updateAgent(agentId: string) {
     if (!selected) return
-    const res = await fetch(`http://localhost:8000/tickets/${selected.id}/agent?token=${token}`, {
+    const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/agent?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_id: agentId }),
@@ -229,7 +229,7 @@ export default function DashboardPage() {
     if (!selected || !reply.trim()) return
     setSending(true)
     try {
-      const res = await fetch(`http://localhost:8000/tickets/${selected.id}/comments?token=${token}`, {
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/comments?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: reply, is_internal: false }),
@@ -246,7 +246,7 @@ export default function DashboardPage() {
 
   async function addInternalNote() {
     if (!selected || !internalNote.trim()) return
-    await fetch(`http://localhost:8000/tickets/${selected.id}/comments?token=${token}`, {
+    await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/tickets/${selected.id}/comments?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: internalNote, is_internal: true }),
@@ -260,7 +260,7 @@ export default function DashboardPage() {
     if (!newTicketCustomer) return
     setCreatingTicket(true)
     try {
-      const res = await fetch(`http://localhost:8000/agent-ticket?token=${token}`, {
+      const res = await fetch(`$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/agent-ticket?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
