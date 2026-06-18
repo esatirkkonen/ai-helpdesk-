@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const res = await fetch('$\{process.env.NEXT_PUBLIC_API_URL || "https://cloudwebai-backend.onrender.com"\}/auth/login', {
+      const res = await fetch('https://cloudwebai-backend.onrender.com/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -130,3 +130,4 @@ export default function LoginPage() {
     </div>
   )
 }
+

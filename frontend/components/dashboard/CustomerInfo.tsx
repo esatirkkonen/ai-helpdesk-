@@ -30,3 +30,4 @@ export default function CustomerInfo({ customer, company, email, phone }: Props)
     </div>
   )
 }
+

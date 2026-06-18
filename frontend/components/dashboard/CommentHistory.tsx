@@ -41,3 +41,4 @@ export default function CommentHistory({ comments }: Props) {
     </div>
   )
 }
+

@@ -17,3 +17,4 @@ export default function PriorityBadge({ priority }: Props) {
     </span>
   )
 }
+

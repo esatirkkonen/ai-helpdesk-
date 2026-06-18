@@ -21,3 +21,4 @@ export default function StatusBadge({ status, size = 'sm' }: Props) {
     </span>
   )
 }
+

@@ -17,3 +17,4 @@ export default function TypeBadge({ type }: Props) {
     </span>
   )
 }
+

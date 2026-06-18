@@ -64,3 +64,4 @@ export default function SLAPanel({ firstResponseDeadline, resolutionDeadline, sl
     </div>
   )
 }
+

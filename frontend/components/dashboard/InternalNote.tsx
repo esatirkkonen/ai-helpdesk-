@@ -35,3 +35,4 @@ export default function InternalNote({ value, onChange, onSave }: Props) {
     </div>
   )
 }
+
