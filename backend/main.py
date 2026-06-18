@@ -17,6 +17,10 @@ import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import threading
+import requests
+import time
+
 
 load_dotenv()
 
@@ -33,6 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def keep_alive():
+    while True:
+        time.sleep(600)  # 10 minuuttia
+        try:
+            requests.get("https://cloudwebai-backend.onrender.com/health")
+            print("Keep-alive ping sent")
+        except:
+            pass
+
+threading.Thread(target=keep_alive, daemon=True).start()
 
 # email konffi
 async def send_email(to: str, subject: str, body: str):
