@@ -225,8 +225,7 @@ async def agent_create_ticket(req: AgentTicketCreate, token: str, background_tas
     db.commit()
     db.refresh(ticket)
 
-    background_tasks.add_task(
-        send_email,
+    await send_email(
         to=customer.email,
         subject=f"IT-tuki on luonut tiketin puolestasi — {ticket.title}",
         body=f"""
