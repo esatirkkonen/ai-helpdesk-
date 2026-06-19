@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -192,7 +192,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/agent-ticket")
-async def agent_create_ticket(req: AgentTicketCreate, token: str, db: Session = Depends(get_db)):
+async def agent_create_ticket(req: AgentTicketCreate, token: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     agent = get_current_user(token, db)
     if agent.role not in ["agent", "admin"]:
         raise HTTPException(status_code=403, detail="Ei oikeuksia")
@@ -201,7 +201,6 @@ async def agent_create_ticket(req: AgentTicketCreate, token: str, db: Session = 
     if not customer:
         raise HTTPException(status_code=404, detail="Asiakasta ei löydy")
 
-    # Hae SLA-politiikka
     sla = None
     if customer.company_id:
         sla = db.query(SLAPolicy).filter(
@@ -226,7 +225,8 @@ async def agent_create_ticket(req: AgentTicketCreate, token: str, db: Session = 
     db.commit()
     db.refresh(ticket)
 
-    await send_email(
+    background_tasks.add_task(
+        send_email,
         to=customer.email,
         subject=f"IT-tuki on luonut tiketin puolestasi — {ticket.title}",
         body=f"""
