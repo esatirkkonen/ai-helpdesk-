@@ -255,35 +255,35 @@ export default function DashboardPage() {
     await fetchComments(selected.id)
   }
 
-  async function createTicketAsAgent(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newTicketCustomer) return
-    setCreatingTicket(true)
-    try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/agent-ticket?token=${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTicketTitle,
-          description: newTicketDesc,
-          priority: newTicketPriority,
-          ticket_type: newTicketType,
-          customer_id: newTicketCustomer,
-        }),
-      })
-      if (res.ok) {
-        setShowNewTicketModal(false)
-        setNewTicketTitle('')
-        setNewTicketDesc('')
-        setNewTicketPriority('Normaali')
-        setNewTicketType('Incident')
-        setNewTicketCustomer('')
-        await fetchTickets()
-      }
-    } finally {
-      setCreatingTicket(false)
+ async function createTicketAsAgent(e: React.FormEvent) {
+  e.preventDefault()
+  if (!newTicketCustomer) return
+  setCreatingTicket(true)
+  try {
+    const res = await fetch(`https://cloudwebai-backend.onrender.com/agent-ticket?token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newTicketTitle,
+        description: newTicketDesc,
+        priority: newTicketPriority,
+        ticket_type: newTicketType,
+        customer_id: newTicketCustomer,
+      }),
+    })
+    setShowNewTicketModal(false)
+    setNewTicketTitle('')
+    setNewTicketDesc('')
+    setNewTicketPriority('Normaali')
+    setNewTicketType('Incident')
+    setNewTicketCustomer('')
+    if (res.ok) {
+      await fetchTickets()
     }
+  } finally {
+    setCreatingTicket(false)
   }
+}
 
   function startTimer(id: string) {
     if (intervalRef.current[id]) return
