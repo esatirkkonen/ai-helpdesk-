@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
+import { API_URL } from '@/lib/api'
 
 type Role = 'customer' | 'agent' | 'admin'
 
@@ -99,7 +100,7 @@ export default function AdminPage() {
   async function fetchUsers() {
     setLoading(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/users?token=${token}`)
+      const res = await fetch(`${API_URL}/users?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       setUsers(data)
@@ -109,7 +110,7 @@ export default function AdminPage() {
   }
 
   async function fetchCompanies() {
-    const res = await fetch(`https://cloudwebai-backend.onrender.com/companies?token=${token}`)
+    const res = await fetch(`${API_URL}/companies?token=${token}`)
     const data = await res.json()
     setCompanies(data)
   }
@@ -118,7 +119,7 @@ export default function AdminPage() {
     e.preventDefault()
     setError('')
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/users?token=${token}`, {
+      const res = await fetch(`${API_URL}/users?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, email: newEmail, password: newPassword, role: newRole, phone: newPhone, company_id: newCompanyId || null }),
@@ -134,7 +135,7 @@ export default function AdminPage() {
     if (!selectedUser) return
     setError('')
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/users/${selectedUser.id}?token=${token}`, {
+      const res = await fetch(`${API_URL}/users/${selectedUser.id}?token=${token}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone, role: editRole, company_id: editCompanyId || null }),
@@ -154,7 +155,7 @@ export default function AdminPage() {
     if (!selectedUser) return
     setError('')
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/users/${selectedUser.id}/reset-password?token=${token}`, {
+      const res = await fetch(`${API_URL}/users/${selectedUser.id}/reset-password?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_password: newPasswordReset }),
@@ -168,7 +169,7 @@ export default function AdminPage() {
   async function deleteUser() {
     if (!selectedUser) return
     try {
-      await fetch(`https://cloudwebai-backend.onrender.com/users/${selectedUser.id}?token=${token}`, { method: 'DELETE' })
+      await fetch(`${API_URL}/users/${selectedUser.id}?token=${token}`, { method: 'DELETE' })
       setSuccess('Käyttäjä poistettu!'); setModal(null); await fetchUsers()
       setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Yhteysvirhe') }
@@ -177,7 +178,7 @@ export default function AdminPage() {
   async function deleteCompany() {
     if (!selectedCompany) return
     try {
-      await fetch(`https://cloudwebai-backend.onrender.com/companies/${selectedCompany.id}?token=${token}`, { method: 'DELETE' })
+      await fetch(`${API_URL}/companies/${selectedCompany.id}?token=${token}`, { method: 'DELETE' })
       setSuccess('Yritys poistettu!'); setModal(null); await fetchCompanies()
       setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Yhteysvirhe') }
@@ -187,7 +188,7 @@ export default function AdminPage() {
     e.preventDefault()
     setError('')
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/companies?token=${token}`, {
+      const res = await fetch(`${API_URL}/companies?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCompanyName, contact_email: newCompanyEmail, phone: newCompanyPhone }),
@@ -199,7 +200,7 @@ export default function AdminPage() {
   }
 
   async function toggleActive(userId: string) {
-    await fetch(`https://cloudwebai-backend.onrender.com/users/${userId}/active?token=${token}`, { method: 'PUT' })
+    await fetch(`${API_URL}/users/${userId}/active?token=${token}`, { method: 'PUT' })
     await fetchUsers()
   }
 

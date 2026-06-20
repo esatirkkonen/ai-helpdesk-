@@ -12,6 +12,7 @@ import ReplyBox from '@/components/dashboard/ReplyBox'
 import StatusBadge from '@/components/shared/StatusBadge'
 import PriorityBadge from '@/components/shared/PriorityBadge'
 import TypeBadge from '@/components/shared/TypeBadge'
+import { API_URL } from '@/lib/api'
 
 type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
 type Priority = 'Matala' | 'Normaali' | 'Kiireellinen'
@@ -80,6 +81,7 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Ticket | null>(null)
   const [loading, setLoading] = useState(true)
   const [reply, setReply] = useState('')
+  const [replySent, setReplySent] = useState(false)
   const [sending, setSending] = useState(false)
   const [timers, setTimers] = useState<Record<string, number>>({})
   const [running, setRunning] = useState<Record<string, boolean>>({})
@@ -118,7 +120,7 @@ export default function DashboardPage() {
   async function fetchTickets() {
     setLoading(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets?token=${token}`)
+      const res = await fetch(`${API_URL}/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       const ticketList = Array.isArray(data) ? data : []
@@ -146,7 +148,7 @@ export default function DashboardPage() {
 
   async function fetchAgents() {
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/agents?token=${token}`)
+      const res = await fetch(`${API_URL}/agents?token=${token}`)
       const data = await res.json()
       setAgents(Array.isArray(data) ? data : [])
     } catch { setAgents([]) }
@@ -154,7 +156,7 @@ export default function DashboardPage() {
 
   async function fetchCustomers() {
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/customers?token=${token}`)
+      const res = await fetch(`${API_URL}/customers?token=${token}`)
       const data = await res.json()
       setCustomers(Array.isArray(data) ? data : [])
     } catch { setCustomers([]) }
@@ -162,7 +164,7 @@ export default function DashboardPage() {
 
   async function fetchComments(ticketId: string) {
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${ticketId}/comments?token=${token}`)
+      const res = await fetch(`${API_URL}/tickets/${ticketId}/comments?token=${token}`)
       const data = await res.json()
       setComments(Array.isArray(data) ? data : [])
     } catch { setComments([]) }
@@ -175,7 +177,7 @@ export default function DashboardPage() {
       setShowTypeModal(true)
       return
     }
-    const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/status?token=${token}`, {
+    const res = await fetch(`${API_URL}/tickets/${selected.id}/status?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -191,12 +193,12 @@ export default function DashboardPage() {
 
   async function confirmClassification() {
     if (!selected || !pendingStatus) return
-    await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/type?token=${token}`, {
+    await fetch(`${API_URL}/tickets/${selected.id}/type?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ticket_type: ticketType }),
     })
-    const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/status?token=${token}`, {
+    const res = await fetch(`${API_URL}/tickets/${selected.id}/status?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: pendingStatus }),
@@ -212,7 +214,7 @@ export default function DashboardPage() {
 
   async function updateAgent(agentId: string) {
     if (!selected) return
-    const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/agent?token=${token}`, {
+    const res = await fetch(`${API_URL}/tickets/${selected.id}/agent?token=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_id: agentId }),
@@ -229,7 +231,7 @@ export default function DashboardPage() {
     if (!selected || !reply.trim()) return
     setSending(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/comments?token=${token}`, {
+      const res = await fetch(`${API_URL}/tickets/${selected.id}/comments?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: reply, is_internal: false }),
@@ -238,6 +240,8 @@ export default function DashboardPage() {
         setReply('')
         await fetchComments(selected.id)
         await fetchTickets()
+        setReplySent(true)
+        setTimeout(() => setReplySent(false), 3000)
       }
     } finally {
       setSending(false)
@@ -246,7 +250,7 @@ export default function DashboardPage() {
 
   async function addInternalNote() {
     if (!selected || !internalNote.trim()) return
-    await fetch(`https://cloudwebai-backend.onrender.com/tickets/${selected.id}/comments?token=${token}`, {
+    await fetch(`${API_URL}/tickets/${selected.id}/comments?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: internalNote, is_internal: true }),
@@ -260,7 +264,7 @@ export default function DashboardPage() {
   if (!newTicketCustomer) return
   setCreatingTicket(true)
   try {
-    const res = await fetch(`https://cloudwebai-backend.onrender.com/agent-ticket?token=${token}`, {
+    const res = await fetch(`${API_URL}/agent-ticket?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -425,7 +429,14 @@ export default function DashboardPage() {
                 onChange={setInternalNote}
                 onSave={addInternalNote}
               />
-
+              {replySent && (
+  <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-2.5 text-green-400 text-sm flex items-center gap-2">
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+    Sähköposti lähetetty asiakkaalle
+  </div>
+)}
               <ReplyBox
                 value={reply}
                 onChange={setReply}

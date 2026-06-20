@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
+import { API_URL } from '@/lib/api'
 
 type Ticket = {
   id: string
@@ -59,7 +60,7 @@ export default function CustomerPage() {
   async function fetchTickets() {
     setLoading(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets?token=${token}`)
+      const res = await fetch(`${API_URL}/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       setTickets(data)
@@ -73,7 +74,7 @@ export default function CustomerPage() {
   async function fetchComments(ticketId: string) {
     setLoadingComments(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets/${ticketId}/comments?token=${token}`)
+      const res = await fetch(`${API_URL}/tickets/${ticketId}/comments?token=${token}`)
       const data = await res.json()
       setComments(data.filter((c: Comment) => !c.is_internal))
     } finally {
@@ -94,7 +95,7 @@ export default function CustomerPage() {
   setSubmitting(true)
   setError('')
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets?token=${token}`, {
+      const res = await fetch(`${API_URL}/tickets?token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, description, priority }),

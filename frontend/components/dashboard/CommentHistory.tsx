@@ -20,13 +20,20 @@ export default function CommentHistory({ comments }: Props) {
       </div>
       <div className="divide-y divide-[#21262d]">
         {comments.map(comment => (
-          <div key={comment.id} className={`px-4 py-3 ${comment.is_internal ? 'bg-amber-500/5' : ''}`}>
+          <div
+            key={comment.id}
+            className={`px-4 py-3 ${comment.is_internal ? 'bg-amber-500/5' : 'bg-blue-500/5'}`}
+          >
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-gray-300">{comment.user_name || 'Käyttäjä'}</span>
-                {comment.is_internal && (
+                {comment.is_internal ? (
                   <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
                     Sisäinen muistiinpano
+                  </span>
+                ) : (
+                  <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                    Vastaus asiakkaalle
                   </span>
                 )}
               </div>
@@ -41,4 +48,3 @@ export default function CommentHistory({ comments }: Props) {
     </div>
   )
 }
-

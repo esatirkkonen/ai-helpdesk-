@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/Topbar'
+import { API_URL } from '@/lib/api'
 
 const allStatuses: Status[] = ['Uusi', 'Luokiteltu', 'Käsittelyssä', 'Odottaa', 'Ratkaistu', 'Suljettu']
 type Status = 'Uusi' | 'Luokiteltu' | 'Käsittelyssä' | 'Odottaa' | 'Ratkaistu' | 'Suljettu'
@@ -68,7 +69,7 @@ useEffect(() => {
   async function fetchTickets() {
     setLoading(true)
     try {
-      const res = await fetch(`https://cloudwebai-backend.onrender.com/tickets?token=${token}`)
+      const res = await fetch(`${API_URL}/tickets?token=${token}`)
       if (res.status === 401) { router.push('/login'); return }
       const data = await res.json()
       setTickets(data)
