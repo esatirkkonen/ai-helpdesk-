@@ -139,7 +139,11 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone, role: editRole, company_id: editCompanyId || null }),
       })
-      if (!res.ok) { setError('Virhe päivityksessä'); return }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.detail || 'Virhe päivityksessä')
+        return
+      }
       setSuccess('Käyttäjä päivitetty!'); setModal(null); await fetchUsers()
       setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Yhteysvirhe') }
