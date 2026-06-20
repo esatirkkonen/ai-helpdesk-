@@ -643,6 +643,13 @@ def update_user(user_id: str, req: UserUpdate, token: str, db: Session = Depends
     user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Käyttäjää ei löydy")
+
+    # Tarkista onko sähköposti jo toisella käyttäjällä
+    if req.email and req.email != user.email:
+        existing = db.query(User).filter(User.email == req.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Sähköposti on jo käytössä toisella käyttäjällä")
+
     if req.name: user.name = req.name
     if req.email: user.email = req.email
     if req.phone: user.phone = req.phone
