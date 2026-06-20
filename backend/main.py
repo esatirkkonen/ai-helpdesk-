@@ -71,7 +71,7 @@ async def send_email(to: str, subject: str, body: str):
         msg['To'] = to
         msg.attach(MIMEText(body, 'html'))
 
-        server = smtplib.SMTP(smtp_host, smtp_port)
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, to, msg.as_string())
